@@ -38,5 +38,5 @@ yarn-error.*
 app-example
 
 # credentials
-firebase.js
 tmdbConfig.js
+firebaseConfigs.js
