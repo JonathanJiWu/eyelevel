@@ -10,9 +10,10 @@ export default function About() {
 
             <button>new user</button>
             <button>sign in</button>
+            <button>sign in with google</button>
             <button>forget password</button>
         </View>
-        
+
     );
 }
 
