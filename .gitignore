@@ -39,4 +39,4 @@ app-example
 
 # credentials
 tmdbConfig.js
-firebaseConfigs.js
+firebaseConfigs.ts
