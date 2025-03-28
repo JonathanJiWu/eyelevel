@@ -1,9 +1,10 @@
-import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform } from "react-native";
+import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform, Animated } from "react-native";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { TMDB_API_KEY } from "../../tmdbConfig";
-import { auth } from "../../firebaseConfigs";
+import { auth, db } from "../../firebaseConfigs";
 import { useRouter } from "expo-router";
+import { doc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
 
 export default function Index() {
   const [query, setQuery] = useState("");
@@ -11,6 +12,8 @@ export default function Index() {
   const [autocompleteResults, setAutocompleteResults] = useState([]);
   const [page, setPage] = useState(1);
   const [user, setUser] = useState(null);
+  const [numColumns, setNumColumns] = useState(2);
+  const [addedMovie, setAddedMovie] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -18,6 +21,18 @@ export default function Index() {
       setUser(currentUser);
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      const width = Platform.OS === "web" ? window.innerWidth : 360;
+      setNumColumns(Math.floor(width / 150));
+    };
+    updateColumns();
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", updateColumns);
+      return () => window.removeEventListener("resize", updateColumns);
+    }
   }, []);
 
   const fetchMovies = async (text: string, pageNum = 1) => {
@@ -65,15 +80,52 @@ export default function Index() {
     }
   };
 
+  const addToWatchlist = async (movie: any) => {
+    if (!user) {
+      alert("Please sign in to add movies to your watchlist.");
+      return;
+    }
+    const userDoc = doc(db, "users", user.uid);
+    try {
+      await setDoc(userDoc, { watchlist: arrayUnion(movie) }, { merge: true });
+      setAddedMovie(movie.title);
+      setTimeout(() => setAddedMovie(null), 3000);
+    } catch (error) {
+      console.error("Error adding to watchlist:", error);
+    }
+  };
+
+  const renderMovieTile = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={[styles.movieTile, { flex: 1 / numColumns }]}
+      onPress={() => router.push(`/movie/${item.id}`)}
+    >
+      <Image
+        source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster_path}` }}
+        style={styles.moviePoster}
+      />
+      <TouchableOpacity
+        style={styles.watchlistButton}
+        onPress={() => addToWatchlist(item)}
+      >
+        <Text style={styles.watchlistText}>+</Text>
+      </TouchableOpacity>
+      <Text style={styles.movieTitle}>{item.title}</Text>
+      <Text style={styles.movieYear}>{item.release_date?.split("-")[0]}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>eyelevel</Text>
         {user ? (
-          <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
+            <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={() => router.push("/login")}>
-            <Text style={styles.signInText}>Sign in to personalize</Text>
+            <Text style={styles.signInText}>Sign In</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -107,21 +159,19 @@ export default function Index() {
       </View>
       <FlatList
         data={movies}
+        key={numColumns}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.movieTile}>
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster_path}` }}
-              style={styles.moviePoster}
-            />
-            <Text style={styles.movieTitle}>{item.title}</Text>
-            <Text style={styles.movieYear}>{item.release_date?.split("-")[0]}</Text>
-          </View>
-        )}
-        numColumns={Math.floor(Platform.OS === "web" ? window.innerWidth / 150 : 2)}
+        renderItem={renderMovieTile}
+        numColumns={numColumns}
         onEndReached={loadMoreMovies}
         onEndReachedThreshold={0.5}
+        columnWrapperStyle={{ justifyContent: "space-evenly" }}
       />
+      {addedMovie && (
+        <Animated.View style={styles.addedMovieOverlay}>
+          <Text style={styles.addedMovieText}>Added "{addedMovie}" to your watchlist</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -193,10 +243,23 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     overflow: "hidden",
     alignItems: "center",
+    position: "relative",
   },
   moviePoster: {
     width: "100%",
     aspectRatio: 27 / 40,
+  },
+  watchlistButton: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 15,
+    padding: 5,
+  },
+  watchlistText: {
+    color: "#fff",
+    fontSize: 16,
   },
   movieTitle: {
     color: "#fff",
@@ -207,5 +270,19 @@ const styles = StyleSheet.create({
     color: "#aaa",
     fontSize: 12,
     marginBottom: 5,
+  },
+  addedMovieOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -100 }, { translateY: -20 }],
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    padding: 10,
+    borderRadius: 5,
+  },
+  addedMovieText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: "center",
   },
 });
