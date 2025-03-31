@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Image, ScrollView } from "react-native";
 import axios from "axios";
+import { useRoute } from "@react-navigation/native"; // Use this hook to access route params
 import { TMDB_API_KEY } from "../../tmdbConfig";
 
-export default function MovieDetail({ route }: any) {
-    const { id } = route?.params || {}; // Add fallback check for route.params
+export default function MovieDetail() {
+    const route = useRoute();
+    const { id } = route.params || {}; // Safely access the id parameter
     const [movie, setMovie] = useState<any>(null);
 
     useEffect(() => {
