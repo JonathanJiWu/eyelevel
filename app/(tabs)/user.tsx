@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from "react-native";
 import { auth, db } from "../../firebaseConfigs";
 import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 
 export default function MyMovies() {
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -34,11 +35,23 @@ export default function MyMovies() {
         }
     };
 
+    const handleSignOut = async () => {
+        try {
+            await signOut(auth);
+            alert("Signed out successfully.");
+        } catch (error) {
+            console.error("Error signing out:", error);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <Text style={styles.title}>My Movies</Text>
             <Text style={styles.label}>Email:</Text>
             <Text style={styles.value}>{userEmail || "Not logged in"}</Text>
+            <TouchableOpacity onPress={handleSignOut}>
+                <Text style={styles.signOutButton}>Sign Out</Text>
+            </TouchableOpacity>
             <Text style={styles.sectionTitle}>Watchlist</Text>
             <FlatList
                 data={watchlist}
@@ -125,6 +138,11 @@ const styles = StyleSheet.create({
     removeButton: {
         color: "#DB4437",
         fontWeight: "bold",
+    },
+    signOutButton: {
+        color: "#DB4437",
+        fontWeight: "bold",
+        marginTop: 10,
     },
 });
 

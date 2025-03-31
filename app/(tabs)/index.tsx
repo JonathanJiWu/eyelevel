@@ -5,6 +5,7 @@ import { TMDB_API_KEY } from "../../tmdbConfig";
 import { auth, db } from "../../firebaseConfigs";
 import { useRouter } from "expo-router";
 import { doc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 
 export default function Index() {
   const [query, setQuery] = useState("");
@@ -95,6 +96,15 @@ export default function Index() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      alert("Signed out successfully.");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
   const renderMovieTile = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.movieTile, { flex: 1 / numColumns }]}
@@ -118,11 +128,15 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        {/* <Text style={styles.title}>eyelevel</Text> */}
         {user ? (
-          <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
-            <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
-          </TouchableOpacity>
+          <View style={styles.userContainer}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
+              <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSignOut}>
+              <Text style={styles.signOutButton}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity onPress={() => router.push("/login")}>
             <Text style={styles.signInText}>Sign In</Text>
@@ -201,6 +215,15 @@ const styles = StyleSheet.create({
     color: "#61dafb",
     fontSize: 16,
     textDecorationLine: "underline",
+  },
+  userContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  signOutButton: {
+    color: "#DB4437",
+    fontWeight: "bold",
+    marginLeft: 10,
   },
   searchContainer: {
     flexDirection: "row",
