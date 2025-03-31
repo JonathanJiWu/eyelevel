@@ -118,7 +118,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>eyelevel</Text>
+        {/* <Text style={styles.title}>eyelevel</Text> */}
         {user ? (
           <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
             <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
