@@ -131,7 +131,7 @@ export default function Index() {
         {user ? (
           <View style={styles.userContainer}>
             <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
-              <Text style={styles.username}>Hello, {user.displayName || "User"}</Text>
+              <Text style={styles.username}>Hello, {user?.displayName || user?.email || "User"}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleSignOut}>
               <Text style={styles.signOutButton}>Sign Out</Text>
@@ -174,7 +174,7 @@ export default function Index() {
       <FlatList
         data={movies}
         key={numColumns}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
         renderItem={renderMovieTile}
         numColumns={numColumns}
         onEndReached={loadMoreMovies}
