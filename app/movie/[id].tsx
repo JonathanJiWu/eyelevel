@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Image, ScrollView, Dimensions } from "react-native";
 import axios from "axios";
-import { useRoute } from "@react-navigation/native"; // Use this hook to access route params
+import { useRoute, useNavigation } from "@react-navigation/native"; // Use this hook to access route params and navigation
 import { TMDB_API_KEY } from "../../tmdbConfig";
 import { auth, db } from "../../firebaseConfigs";
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 
 export default function MovieDetail() {
     const route = useRoute();
+    const navigation = useNavigation();
     const { id } = route.params || {}; // Safely access the id parameter
     const [movie, setMovie] = useState<any>(null);
     const [isHorizontal, setIsHorizontal] = useState(false);
@@ -31,9 +32,12 @@ export default function MovieDetail() {
         const fetchMovie = async () => {
             try {
                 const response = await axios.get(
-                    `https://api.themoviedb.org/3/movie/${id}?api_key=${TMDB_API_KEY}`
+                    `https://api.themoviedb.org/3/movie/${id}?api_key=${TMDB_API_KEY}&append_to_response=credits`
                 );
                 setMovie(response.data);
+                navigation.setOptions({
+                    title: `${response.data.title} (${response.data.release_date?.split("-")[0] || "N/A"})`,
+                });
             } catch (error) {
                 console.error("Error fetching movie details:", error);
             }
@@ -89,6 +93,11 @@ export default function MovieDetail() {
         );
     }
 
+    const director = movie?.credits?.crew?.find((crewMember: any) => crewMember.job === "Director")?.name || "Unknown";
+    const genres = movie?.genres?.map((genre: any) => genre.name).join(", ") || "N/A";
+    const languages = movie?.spoken_languages?.map((lang: any) => lang.name).join(", ") || "N/A";
+    const cast = movie?.credits?.cast?.slice(0, 5).map((actor: any) => actor.name).join(", ") || "N/A";
+
     return (
         <ScrollView style={styles.container}>
             <View style={[styles.contentContainer, isHorizontal && styles.horizontalContentContainer]}>
@@ -99,12 +108,19 @@ export default function MovieDetail() {
                 <View style={[styles.detailsContainer, isHorizontal && styles.horizontalDetailsContainer]}>
                     <Text style={styles.title}>{movie.title}</Text>
                     <Text style={styles.info}>Release Year: {movie.release_date?.split("-")[0]}</Text>
-                    <Text style={styles.info}>Director: {movie.director || "Unknown"}</Text>
+                    <Text style={styles.info}>Director: {director}</Text>
+                    <Text style={styles.info}>Genres: {genres}</Text>
+                    <Text style={styles.info}>Languages: {languages}</Text>
+                    <Text style={styles.info}>Cast: {cast}</Text>
                     <Text style={styles.overview}>{movie.overview}</Text>
                     <Text style={styles.watchlistButton} onPress={toggleWatchlist}>
                         {isInWatchlist ? "Remove from My Watchlist" : "Add to My Watchlist"}
                     </Text>
                 </View>
+            </View>
+            <View style={styles.testingSection}>
+                <Text style={styles.testingTitle}>Testing Section</Text>
+                <Text style={styles.testingContent}>{JSON.stringify(movie, null, 2)}</Text>
             </View>
         </ScrollView>
     );
@@ -143,7 +159,7 @@ const styles = StyleSheet.create({
         alignItems: "flex-start",
     },
     poster: {
-        width: "100%",
+        width: "50%",
         aspectRatio: 2 / 3, // Maintain aspect ratio
         borderRadius: 10,
     },
@@ -180,5 +196,20 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "bold",
         textDecorationLine: "underline",
+    },
+    testingSection: {
+        marginTop: 20,
+        padding: 10,
+        backgroundColor: "#f0f0f0",
+        borderRadius: 5,
+    },
+    testingTitle: {
+        fontSize: 18,
+        fontWeight: "bold",
+        marginBottom: 10,
+    },
+    testingContent: {
+        fontSize: 14,
+        color: "#333",
     },
 });

@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { Stack } from "expo-router";
 import { useColorScheme, Switch, View, StyleSheet } from "react-native";
+
+const ThemeContext = createContext({ isDarkMode: false, toggleDarkMode: () => { } });
+
+export function useTheme() {
+  return useContext(ThemeContext);
+}
 
 export default function RootLayout() {
   const systemColorScheme = useColorScheme();
@@ -13,14 +19,16 @@ export default function RootLayout() {
   const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
 
   return (
-    <View style={[styles.container, isDarkMode ? styles.dark : styles.light]}>
-      <Stack>
-        <Stack.Screen name="Login" options={{ headerTitle: "Login" }} />
-        <Stack.Screen name="Explore" options={{ headerTitle: "Explore" }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-      <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
-    </View>
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+      <View style={[styles.container, isDarkMode ? styles.dark : styles.light]}>
+        <Stack screenOptions={{ headerStyle: { backgroundColor: isDarkMode ? "#000" : "#fff" }, headerTintColor: isDarkMode ? "#fff" : "#000" }}>
+          <Stack.Screen name="Login" options={{ headerTitle: "Login" }} />
+          <Stack.Screen name="Explore" options={{ headerTitle: "Explore" }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+        <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
+      </View>
+    </ThemeContext.Provider>
   );
 }
 
