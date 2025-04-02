@@ -44,7 +44,7 @@ export default function Explore() {
     };
 
     const renderMovieTile = ({ item }: { item: any }) => (
-        <View style={styles.movieTile}>
+        <View style={[styles.movieTile, isDarkMode && styles.darkTile]}>
             <TouchableOpacity onPress={() => router.push(`/movie/${item.id}`)}>
                 <Image
                     source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster_path}` }}
@@ -67,11 +67,19 @@ export default function Explore() {
             columnWrapperStyle={styles.row}
             onEndReached={() => setPage((prev) => prev + 1)}
             onEndReachedThreshold={0.5}
+            style={[styles.container, isDarkMode && styles.darkContainer]}
         />
     );
 }
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: "#fff",
+    },
+    darkContainer: {
+        backgroundColor: "#121212", // Android's default dark mode background
+    },
     poster: {
         width: 120,
         height: 180,
@@ -84,6 +92,11 @@ const styles = StyleSheet.create({
     movieTile: {
         margin: 5,
         alignItems: "center",
+        backgroundColor: "#f5f5f5",
+        borderRadius: 5,
+    },
+    darkTile: {
+        backgroundColor: "#1e1e1e", // Dark tile background
     },
     watchlistButton: {
         marginTop: 5,

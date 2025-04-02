@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image, ScrollView, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Image, ScrollView, Dimensions, ImageBackground } from "react-native";
 import axios from "axios";
 import { useRoute, useNavigation } from "@react-navigation/native"; // Use this hook to access route params and navigation
 import { TMDB_API_KEY } from "../../tmdbConfig";
@@ -13,6 +13,7 @@ export default function MovieDetail() {
     const [movie, setMovie] = useState<any>(null);
     const [isHorizontal, setIsHorizontal] = useState(false);
     const [isInWatchlist, setIsInWatchlist] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(false); // State for dark mode
     const user = auth.currentUser;
 
     useEffect(() => {
@@ -93,44 +94,63 @@ export default function MovieDetail() {
         );
     }
 
+    const backdropUrl = movie.backdrop_path
+        ? `https://image.tmdb.org/t/p/w500${movie.backdrop_path}`
+        : null;
+
     const director = movie?.credits?.crew?.find((crewMember: any) => crewMember.job === "Director")?.name || "Unknown";
     const genres = movie?.genres?.map((genre: any) => genre.name).join(", ") || "N/A";
-    const languages = movie?.spoken_languages?.map((lang: any) => lang.name).join(", ") || "N/A";
+    const languages = movie?.spoken_languages?.map((lang: any) => lang.english_name).join(", ") || "N/A";
     const cast = movie?.credits?.cast?.slice(0, 5).map((actor: any) => actor.name).join(", ") || "N/A";
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={[styles.contentContainer, isHorizontal && styles.horizontalContentContainer]}>
-                <Image
-                    source={{ uri: `https://image.tmdb.org/t/p/w500${movie.poster_path}` }}
-                    style={[styles.poster, isHorizontal && styles.horizontalPoster]}
-                />
-                <View style={[styles.detailsContainer, isHorizontal && styles.horizontalDetailsContainer]}>
-                    <Text style={styles.title}>{movie.title}</Text>
-                    <Text style={styles.info}>Release Year: {movie.release_date?.split("-")[0]}</Text>
-                    <Text style={styles.info}>Director: {director}</Text>
-                    <Text style={styles.info}>Genres: {genres}</Text>
-                    <Text style={styles.info}>Languages: {languages}</Text>
-                    <Text style={styles.info}>Cast: {cast}</Text>
-                    <Text style={styles.overview}>{movie.overview}</Text>
-                    <Text style={styles.watchlistButton} onPress={toggleWatchlist}>
-                        {isInWatchlist ? "Remove from My Watchlist" : "Add to My Watchlist"}
-                    </Text>
+        <ImageBackground
+            source={backdropUrl ? { uri: backdropUrl } : null}
+            style={[styles.background, isDarkMode && styles.darkBackground]}
+            blurRadius={5}
+        >
+            <ScrollView style={[styles.container, isDarkMode && styles.darkContainer]}>
+                <View style={[styles.contentContainer, isHorizontal && styles.horizontalContentContainer]}>
+                    <Image
+                        source={{ uri: `https://image.tmdb.org/t/p/w500${movie.poster_path}` }}
+                        style={[styles.poster, isHorizontal && styles.horizontalPoster]}
+                    />
+                    <View style={[styles.detailsContainer, isHorizontal && styles.horizontalDetailsContainer]}>
+                        <Text style={[styles.title, isDarkMode && styles.darkText]}>{movie.title}</Text>
+                        <Text style={[styles.info, isDarkMode && styles.darkText]}>Release Year: {movie.release_date?.split("-")[0]}</Text>
+                        <Text style={[styles.info, isDarkMode && styles.darkText]}>Director: {director}</Text>
+                        <Text style={[styles.info, isDarkMode && styles.darkText]}>Genres: {genres}</Text>
+                        <Text style={[styles.info, isDarkMode && styles.darkText]}>Languages: {languages}</Text>
+                        <Text style={[styles.info, isDarkMode && styles.darkText]}>Cast: {cast}</Text>
+                        <Text style={[styles.overview, isDarkMode && styles.darkText]}>{movie.overview}</Text>
+                        <Text style={styles.watchlistButton} onPress={toggleWatchlist}>
+                            {isInWatchlist ? "Remove from My Watchlist" : "Add to My Watchlist"}
+                        </Text>
+                    </View>
                 </View>
-            </View>
-            <View style={styles.testingSection}>
-                <Text style={styles.testingTitle}>Testing Section</Text>
-                <Text style={styles.testingContent}>{JSON.stringify(movie, null, 2)}</Text>
-            </View>
-        </ScrollView>
+                <View style={styles.testingSection}>
+                    <Text style={styles.testingTitle}>Testing Section</Text>
+                    <Text style={styles.testingContent}>{JSON.stringify(movie, null, 2)}</Text>
+                </View>
+            </ScrollView>
+        </ImageBackground>
     );
 }
 
 const styles = StyleSheet.create({
+    background: {
+        flex: 1,
+    },
+    darkBackground: {
+        backgroundColor: "#121212", // Android's default dark mode background
+    },
     container: {
         flex: 1,
-        backgroundColor: "#FAFAFA",
+        backgroundColor: "rgba(255, 255, 255, 0.9)", // Add transparency for readability
         padding: 20,
+    },
+    darkContainer: {
+        backgroundColor: "rgba(18, 18, 18, 0.9)", // Adjusted for dark mode
     },
     errorContainer: {
         flex: 1,
@@ -196,6 +216,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "bold",
         textDecorationLine: "underline",
+    },
+    darkText: {
+        color: "#e0e0e0", // Light gray text for dark mode
     },
     testingSection: {
         marginTop: 20,

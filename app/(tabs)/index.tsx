@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform, Animated } from "react-native";
+import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform, Animated, Switch } from "react-native";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { TMDB_API_KEY } from "../../tmdbConfig";
@@ -6,6 +6,8 @@ import { auth, db } from "../../firebaseConfigs";
 import { useRouter } from "expo-router";
 import { doc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { useTheme } from "../_layout"; // Import useTheme
+import { MaterialIcons } from "@expo/vector-icons"; // Add this import
 
 export default function Index() {
   const [query, setQuery] = useState("");
@@ -16,6 +18,7 @@ export default function Index() {
   const [numColumns, setNumColumns] = useState(2);
   const [addedMovie, setAddedMovie] = useState<string | null>(null);
   const router = useRouter();
+  const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -125,23 +128,33 @@ export default function Index() {
     </TouchableOpacity>
   );
 
+  const renderHeaderRight = () => (
+    <View style={styles.headerRight}>
+      <MaterialIcons
+        name={isDarkMode ? "nights-stay" : "wb-sunny"}
+        size={24}
+        color={isDarkMode ? "#fff" : "#000"}
+      />
+      <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
+      {user ? (
+        <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
+          <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
+            Hello, {user?.displayName || user?.email || "User"}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity onPress={() => router.push("/login")}>
+          <Text style={[styles.signInText, isDarkMode && styles.darkText]}>Sign In</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <View style={styles.header}>
-        {user ? (
-          <View style={styles.userContainer}>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
-              <Text style={styles.username}>Hello, {user?.displayName || user?.email || "User"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleSignOut}>
-              <Text style={styles.signOutButton}>Sign Out</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity onPress={() => router.push("/login")}>
-            <Text style={styles.signInText}>Sign In</Text>
-          </TouchableOpacity>
-        )}
+        <Text style={[styles.title, isDarkMode && styles.darkText]}>Home</Text>
+        {renderHeaderRight()}
       </View>
       <View style={styles.searchContainer}>
         <TextInput
@@ -193,8 +206,10 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#25292e",
-    padding: 10,
+    backgroundColor: "#fff",
+  },
+  darkContainer: {
+    backgroundColor: "#121212", // Dark mode background
   },
   header: {
     flexDirection: "row",
@@ -211,10 +226,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
   },
+  darkText: {
+    color: "#e0e0e0", // Light gray text for dark mode
+  },
   signInText: {
-    color: "#61dafb",
     fontSize: 16,
-    textDecorationLine: "underline",
+    color: "#000",
   },
   userContainer: {
     flexDirection: "row",
@@ -307,5 +324,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     textAlign: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  toggle: {
+    marginHorizontal: 10,
   },
 });
