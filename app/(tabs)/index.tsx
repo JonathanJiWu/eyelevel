@@ -12,13 +12,14 @@ import { MaterialIcons } from "@expo/vector-icons"; // Add this import
 export default function Index() {
   const [query, setQuery] = useState("");
   const [movies, setMovies] = useState([]);
+  const [popularMovies, setPopularMovies] = useState([]); // Add popular movies state
   const [autocompleteResults, setAutocompleteResults] = useState([]);
   const [page, setPage] = useState(1);
   const [user, setUser] = useState(null);
   const [numColumns, setNumColumns] = useState(2);
   const [addedMovie, setAddedMovie] = useState<string | null>(null);
   const router = useRouter();
-  const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
+  const { isDarkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -26,6 +27,10 @@ export default function Index() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    fetchPopularMovies(); // Fetch popular movies on mount
+  }, [page]);
 
   useEffect(() => {
     const updateColumns = () => {
@@ -51,13 +56,29 @@ export default function Index() {
     }
   };
 
+  const fetchPopularMovies = async () => {
+    try {
+      const response = await axios.get(
+        `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
+      );
+      const weightedMovies = response.data.results
+        .filter((movie) => !movie.adult) // Exclude adult movies
+        .sort((a, b) => new Date(b.release_date).getTime() - new Date(a.release_date).getTime()); // Prioritize recent releases
+      setPopularMovies((prev) => [...prev, ...weightedMovies]);
+    } catch (error) {
+      console.error("Error fetching popular movies:", error);
+    }
+  };
+
   const searchMovies = async (text: string) => {
     setQuery(text);
     if (text.length > 2) {
       const results = await fetchMovies(text);
       setMovies(results);
+      setPopularMovies([]); // Clear popular movies when searching
     } else {
       setMovies([]);
+      fetchPopularMovies(); // Reload popular movies if search is cleared
     }
   };
 
@@ -68,20 +89,13 @@ export default function Index() {
       setAutocompleteResults(results.slice(0, 5));
     } else {
       setAutocompleteResults([]);
+      fetchPopularMovies(); // Reload popular movies if autocomplete is cleared
     }
   };
 
   const loadMoreMovies = async () => {
     const nextPage = page + 1;
-    const moreMovies = await fetchMovies(query, nextPage);
-    setMovies((prevMovies) => [...prevMovies, ...moreMovies]);
     setPage(nextPage);
-  };
-
-  const handleKeyPress = (event: any) => {
-    if (Platform.OS === "web" && event.key === "Enter") {
-      searchMovies(query);
-    }
   };
 
   const addToWatchlist = async (movie: any) => {
@@ -96,15 +110,6 @@ export default function Index() {
       setTimeout(() => setAddedMovie(null), 3000);
     } catch (error) {
       console.error("Error adding to watchlist:", error);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      alert("Signed out successfully.");
-    } catch (error) {
-      console.error("Error signing out:", error);
     }
   };
 
@@ -128,33 +133,29 @@ export default function Index() {
     </TouchableOpacity>
   );
 
-  const renderHeaderRight = () => (
-    <View style={styles.headerRight}>
-      <MaterialIcons
-        name={isDarkMode ? "nights-stay" : "wb-sunny"}
-        size={24}
-        color={isDarkMode ? "#fff" : "#000"}
-      />
-      <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
-      {user ? (
-        <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
-          <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
-            Hello, {user?.displayName || user?.email || "User"}
-          </Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity onPress={() => router.push("/login")}>
-          <Text style={[styles.signInText, isDarkMode && styles.darkText]}>Sign In</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <View style={styles.header}>
         <Text style={[styles.title, isDarkMode && styles.darkText]}>Home</Text>
-        {renderHeaderRight()}
+        <View style={styles.headerRight}>
+          <MaterialIcons
+            name={isDarkMode ? "nights-stay" : "wb-sunny"}
+            size={24}
+            color={isDarkMode ? "#fff" : "#000"}
+          />
+          <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
+          {user ? (
+            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
+              <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
+                Hello, {user?.displayName || user?.email || "User"}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => router.push("/login")}>
+              <Text style={[styles.signInText, isDarkMode && styles.darkText]}>Sign In</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       <View style={styles.searchContainer}>
         <TextInput
@@ -162,7 +163,7 @@ export default function Index() {
           placeholder="Search for movies..."
           value={query}
           onChangeText={handleAutocomplete}
-          onKeyPress={handleKeyPress}
+          onSubmitEditing={() => searchMovies(query)} // Trigger search on submit
         />
         <TouchableOpacity style={styles.searchButton} onPress={() => searchMovies(query)}>
           <Text style={styles.searchButtonText}>🔍</Text>
@@ -185,7 +186,7 @@ export default function Index() {
         )}
       </View>
       <FlatList
-        data={movies}
+        data={movies.length > 0 ? movies : popularMovies} // Show search results or popular movies
         key={numColumns}
         keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
         renderItem={renderMovieTile}
@@ -193,6 +194,7 @@ export default function Index() {
         onEndReached={loadMoreMovies}
         onEndReachedThreshold={0.5}
         columnWrapperStyle={{ justifyContent: "space-evenly" }}
+        extraData={movies} // Ensure FlatList updates when movies change
       />
       {addedMovie && (
         <Animated.View style={styles.addedMovieOverlay}>
