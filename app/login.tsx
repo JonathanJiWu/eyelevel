@@ -1,7 +1,7 @@
-import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import React, { useState } from 'react';
 import { auth } from '../firebaseConfigs';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { router } from 'expo-router';
 
 const index = () => {
@@ -24,7 +24,7 @@ const index = () => {
             if (user) router.replace('/(tabs)');
         } catch (error: any) {
             console.log(error);
-            alert('Sign in failed: ' + error.message);
+            alert('Sign up failed: ' + error.message);
         }
     };
 
@@ -36,6 +36,20 @@ const index = () => {
         } catch (error: any) {
             console.log(error);
             alert('Google sign-in failed: ' + error.message);
+        }
+    };
+
+    const resetPassword = async () => {
+        if (!email) {
+            Alert.alert('Error', 'Please enter your email address to reset your password.');
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(auth, email);
+            Alert.alert('Success', 'Password reset email sent! Check your inbox.');
+        } catch (error: any) {
+            console.log(error);
+            Alert.alert('Error', 'Failed to send password reset email: ' + error.message);
         }
     };
 
@@ -52,6 +66,9 @@ const index = () => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.googleButton} onPress={signInWithGoogle}>
                 <Text style={styles.text}>Sign in with Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resetPassword}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
         </SafeAreaView>
     );
@@ -121,5 +138,11 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 18,
         fontWeight: '600',
+    },
+    forgotPasswordText: {
+        color: '#1A237E',
+        fontSize: 16,
+        fontWeight: '600',
+        marginTop: 10,
     },
 });

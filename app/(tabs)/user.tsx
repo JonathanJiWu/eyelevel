@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Switch } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Switch, Alert } from "react-native";
 import { auth, db } from "../../firebaseConfigs";
 import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -11,18 +11,22 @@ export default function MyMovies() {
     const [watchlist, setWatchlist] = useState<any[]>([]); // Ensure watchlist is an array
     const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
 
-    useEffect(() => {
-        const fetchUserData = async () => {
-            const user = auth.currentUser;
-            if (user) {
-                setUserEmail(user.email);
-                const userDoc = doc(db, "users", user.uid);
-                const docSnap = await getDoc(userDoc);
-                if (docSnap.exists()) {
-                    setWatchlist(docSnap.data().watchlist || []);
-                }
+    const fetchUserData = async () => {
+        const user = auth.currentUser;
+        if (user) {
+            setUserEmail(user.email);
+            const userDoc = doc(db, "users", user.uid);
+            const docSnap = await getDoc(userDoc);
+            if (docSnap.exists()) {
+                setWatchlist(docSnap.data().watchlist || []);
             }
-        };
+        } else {
+            setUserEmail(null);
+            setWatchlist([]);
+        }
+    };
+
+    useEffect(() => {
         fetchUserData();
     }, []);
 
@@ -39,12 +43,29 @@ export default function MyMovies() {
     };
 
     const handleSignOut = async () => {
-        try {
-            await signOut(auth);
-            alert("Signed out successfully.");
-        } catch (error) {
-            console.error("Error signing out:", error);
-        }
+        Alert.alert(
+            "Sign Out",
+            "Are you sure you want to sign out?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Sign Out",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await signOut(auth); // Ensure signOut is called correctly
+                            setUserEmail(null); // Clear user email
+                            setWatchlist([]); // Clear watchlist
+                            alert("Signed out successfully.");
+                        } catch (error) {
+                            console.error("Error signing out:", error);
+                            alert("Failed to sign out. Please try again.");
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
     };
 
     const renderHeaderRight = () => (

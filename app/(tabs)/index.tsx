@@ -136,7 +136,7 @@ export default function Index() {
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <View style={styles.header}>
-        <Text style={[styles.title, isDarkMode && styles.darkText]}>Home</Text>
+        {/* <Text style={[styles.title, isDarkMode && styles.darkText]}>Home</Text> */}
         <View style={styles.headerRight}>
           <MaterialIcons
             name={isDarkMode ? "nights-stay" : "wb-sunny"}
