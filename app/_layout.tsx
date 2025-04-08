@@ -34,7 +34,7 @@ export default function RootLayout() {
       <StatusBar
         style={isDarkMode ? "light" : "dark"} // Text/icons color
         backgroundColor={isDarkMode ? "#121212" : "#fff"} // Background color
-        translucent={false}
+        translucent={true}
       />
       <View style={[styles.container, isDarkMode ? styles.dark : styles.light]}>
         <Stack

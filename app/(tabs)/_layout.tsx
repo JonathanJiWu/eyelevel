@@ -23,9 +23,9 @@ export default function TabLayout() {
                 },
             }}
         >
-            <Tabs.Screen name="index" options={{ title: 'eyelevel' }} />
+            <Tabs.Screen name="index" options={{ title: 'eyelevel', headerShown: false }} />
             {/* <Tabs.Screen name="explore" options={{ title: 'Explore' }} /> */}
-            <Tabs.Screen name="user" options={{ title: 'My Movies' }} />
+            <Tabs.Screen name="user" options={{ title: 'My Movies', headerShown: false }} />
         </Tabs>
     );
 }

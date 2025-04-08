@@ -136,7 +136,7 @@ export default function Index() {
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <View style={styles.header}>
-        {/* <Text style={[styles.title, isDarkMode && styles.darkText]}>Home</Text> */}
+        <Text style={[styles.title, isDarkMode && styles.darkText]}>eyelevel</Text>
         <View style={styles.headerRight}>
           <MaterialIcons
             name={isDarkMode ? "nights-stay" : "wb-sunny"}
@@ -157,7 +157,15 @@ export default function Index() {
           )}
         </View>
       </View>
-      <View style={styles.searchContainer}>
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            backgroundColor: isDarkMode ? "#333" : "#fff", // Match searchBar background
+            borderColor: isDarkMode ? "#555" : "#ccc", // Match searchBar borderColor
+          },
+        ]}
+      >
         <TextInput
           style={styles.searchBar}
           placeholder="Search for movies..."
@@ -166,7 +174,7 @@ export default function Index() {
           onSubmitEditing={() => searchMovies(query)} // Trigger search on submit
         />
         <TouchableOpacity style={styles.searchButton} onPress={() => searchMovies(query)}>
-          <Text style={styles.searchButtonText}>🔍</Text>
+          <Text style={[styles.searchButtonText, { color: isDarkMode ? "#fff" : "#000" }]}>🔍</Text>
         </TouchableOpacity>
         {autocompleteResults.length > 0 && (
           <View style={styles.autocompleteDropdown}>
@@ -217,10 +225,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
+    marginTop: 15,
+    paddingHorizontal: 25,
   },
   title: {
-    color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -235,34 +244,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#000",
   },
-  userContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  signOutButton: {
-    color: "#DB4437",
-    fontWeight: "bold",
-    marginLeft: 10,
-  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,
-    backgroundColor: "#fff",
-    borderRadius: 5,
-    paddingHorizontal: 10,
+    backgroundColor: "#fff", // Default background color
+    borderRadius: 8, // Match searchBar borderRadius
+    borderWidth: 1,
+    borderColor: "#ccc", // Default border color
+    marginHorizontal: 25, // Match container padding
   },
   searchBar: {
     flex: 1,
     padding: 10,
     fontSize: 16,
+    // paddingVertical: 5,
+    // marginHorizontal: 10,
+    backgroundColor: "#f0f0f0", // Light grey color for light mode
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
   },
   searchButton: {
     padding: 5,
   },
   searchButtonText: {
     fontSize: 16,
-    color: "#333",
+    // Removed dynamic logic from styles
+    color: "#000",
   },
   autocompleteDropdown: {
     position: "absolute",

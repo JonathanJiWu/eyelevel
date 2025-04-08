@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Switch, Alert } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Switch, Alert, TextInput } from "react-native";
 import { auth, db } from "../../firebaseConfigs";
 import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -9,6 +9,7 @@ import { useRouter } from "expo-router"; // Import useRouter for navigation
 
 export default function MyMovies() {
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [userName, setUserName] = useState<string | null>(null); // Add state for user name
     const [watchlist, setWatchlist] = useState<any[]>([]); // Ensure watchlist is an array
     const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
     const router = useRouter(); // Initialize router
@@ -21,10 +22,12 @@ export default function MyMovies() {
             const docSnap = await getDoc(userDoc);
             if (docSnap.exists()) {
                 setWatchlist(docSnap.data().watchlist || []);
+                setUserName(docSnap.data().name || ""); // Fetch user name
             }
         } else {
             setUserEmail(null);
             setWatchlist([]);
+            setUserName(null); // Clear user name
         }
     };
 
@@ -44,11 +47,24 @@ export default function MyMovies() {
         }
     };
 
+    const updateUserName = async (newName: string) => {
+        const user = auth.currentUser;
+        if (!user) return;
+        const userDoc = doc(db, "users", user.uid);
+        try {
+            await updateDoc(userDoc, { name: newName });
+            setUserName(newName); // Update state with new name
+        } catch (error) {
+            console.error("Error updating user name:", error);
+        }
+    };
+
     const handleSignOut = async () => {
         try {
             await signOut(auth); // Ensure signOut is called correctly
             setUserEmail(null); // Clear user email
             setWatchlist([]); // Clear watchlist
+            setUserName(null); // Clear user name
             Alert.alert("Success", "Signed out successfully."); // Use Alert for consistent UI feedback
         } catch (error) {
             console.error("Error signing out:", error);
@@ -110,6 +126,14 @@ export default function MyMovies() {
                 <Text style={[styles.title, isDarkMode && styles.darkText]}>My Movies</Text>
                 {renderHeaderRight()}
             </View>
+            <Text style={[styles.label, isDarkMode && styles.darkText]}>Name:</Text>
+            <TextInput
+                style={[styles.input, isDarkMode && styles.darkInput]} // Add input styling
+                value={userName || ""}
+                onChangeText={updateUserName} // Update name on change
+                placeholder="Enter your name"
+                placeholderTextColor={isDarkMode ? "#888" : "#ccc"}
+            />
             <Text style={[styles.label, isDarkMode && styles.darkText]}>Email:</Text>
             <Text style={[styles.value, isDarkMode && styles.darkText]}>
                 {userEmail || "Not logged in"}
@@ -207,6 +231,18 @@ const styles = StyleSheet.create({
         color: "#000",
     },
     darkText: {
+        color: "#fff",
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 5,
+        padding: 10,
+        marginBottom: 10,
+        color: "#000",
+    },
+    darkInput: {
+        borderColor: "#555",
         color: "#fff",
     },
 });
