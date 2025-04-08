@@ -123,7 +123,17 @@ export default function MyMovies() {
     return (
         <View style={[styles.container, isDarkMode && styles.darkContainer]}>
             <View style={styles.header}>
-                <Text style={[styles.title, isDarkMode && styles.darkText]}>My Movies</Text>
+                <Text
+                    style={[styles.title, isDarkMode && styles.darkText]}
+                    onPress={async () => {
+                        setMovies([]); // Clear search results
+                        setPopularMovies([]); // Reset popular movies
+                        await fetchPopularMovies(1, 5); // Reload 100 movies (5 pages of 20 movies each)
+                        router.replace("/"); // Use replace to ensure a full refresh of the index page
+                    }}
+                >
+                    eyelevel
+                </Text>
                 {renderHeaderRight()}
             </View>
             <Text style={[styles.label, isDarkMode && styles.darkText]}>Name:</Text>
