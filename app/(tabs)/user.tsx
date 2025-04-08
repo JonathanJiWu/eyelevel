@@ -89,6 +89,9 @@ export default function MyMovies() {
                     <Text style={[styles.signOutButton, isDarkMode && styles.darkText]}>Sign In</Text>
                 </TouchableOpacity>
             )}
+            <TouchableOpacity onPress={() => router.push("/screens/addFriend")}> {/* Navigate to addFriend page */}
+                <Text style={[styles.addFriendButton, isDarkMode && styles.darkText]}>Add Friend</Text>
+            </TouchableOpacity>
         </View>
     );
 
@@ -156,9 +159,46 @@ export default function MyMovies() {
                 keyExtractor={(item) => item.id?.toString() || Math.random().toString()} // Ensure unique key
                 renderItem={renderWatchlistItem} // Use the updated render function
             />
+            <FriendsList /> {/* Add FriendsList component */}
         </View>
     );
 }
+
+const FriendsList = () => {
+    const [friends, setFriends] = useState([]);
+
+    useEffect(() => {
+        const fetchFriends = async () => {
+            const user = auth.currentUser;
+            if (user) {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    setFriends(userDoc.data().friends || []);
+                }
+            }
+        };
+        fetchFriends();
+    }, []);
+
+    const renderFriendItem = ({ item }) => (
+        <View style={styles.friendItem}>
+            <Text style={styles.friendName}>{item.name || "Unknown User"}</Text>
+            <Text style={styles.friendEmail}>{item.email}</Text>
+        </View>
+    );
+
+    return (
+        <View style={styles.friendsContainer}>
+            <Text style={styles.friendsTitle}>Friends List</Text>
+            <FlatList
+                data={friends}
+                keyExtractor={(item) => item.id}
+                renderItem={renderFriendItem}
+                ListEmptyComponent={<Text style={styles.emptyText}>No friends found.</Text>}
+            />
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     container: {
@@ -254,6 +294,42 @@ const styles = StyleSheet.create({
     darkInput: {
         borderColor: "#555",
         color: "#fff",
+    },
+    addFriendButton: {
+        fontSize: 16,
+        color: "#000",
+        marginLeft: 10,
+    },
+    friendsContainer: {
+        flex: 1,
+        padding: 20,
+        backgroundColor: "#FAFAFA",
+    },
+    friendsTitle: {
+        fontSize: 24,
+        fontWeight: "bold",
+        marginBottom: 20,
+        color: "#1A237E",
+    },
+    friendItem: {
+        padding: 15,
+        backgroundColor: "#E8EAF6",
+        borderRadius: 5,
+        marginBottom: 10,
+    },
+    friendName: {
+        fontSize: 16,
+        color: "#3C4858",
+        fontWeight: "bold",
+    },
+    friendEmail: {
+        fontSize: 14,
+        color: "#3C4858",
+    },
+    emptyText: {
+        textAlign: "center",
+        color: "#888",
+        marginTop: 20,
     },
 });
 

@@ -176,6 +176,9 @@ export default function Index() {
               <Text style={[styles.signInText, isDarkMode && styles.darkText]}>Sign In</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity onPress={() => router.push("/screens/addFriend")}> {/* Navigate to addFriend page */}
+            <Text style={[styles.addFriendButton, isDarkMode && styles.darkText]}>Add Friend</Text>
+          </TouchableOpacity>
         </View>
       </View>
       <View
@@ -368,5 +371,10 @@ const styles = StyleSheet.create({
   },
   toggle: {
     marginHorizontal: 10,
+  },
+  addFriendButton: {
+    fontSize: 16,
+    color: "#000",
+    marginLeft: 10,
   },
 });
