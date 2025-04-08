@@ -29,8 +29,8 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    fetchPopularMovies(); // Fetch popular movies on mount
-  }, [page]);
+    fetchPopularMovies(1, 5); // Fetch 100 movies (20 movies per page * 5 pages)
+  }, []);
 
   useEffect(() => {
     const updateColumns = () => {
@@ -56,15 +56,23 @@ export default function Index() {
     }
   };
 
-  const fetchPopularMovies = async () => {
+  const fetchPopularMovies = async (startPage = 1, totalPages = 1) => {
     try {
-      const response = await axios.get(
-        `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
-      );
-      const weightedMovies = response.data.results
-        .filter((movie) => !movie.adult) // Exclude adult movies
-        .sort((a, b) => new Date(b.release_date).getTime() - new Date(a.release_date).getTime()); // Prioritize recent releases
-      setPopularMovies((prev) => [...prev, ...weightedMovies]);
+      let allMovies = [];
+      for (let page = startPage; page < startPage + totalPages; page++) {
+        const response = await axios.get(
+          `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
+        );
+        const weightedMovies = response.data.results
+          .filter((movie) => !movie.adult)
+          .sort(
+            (a, b) =>
+              new Date(b.release_date).getTime() -
+              new Date(a.release_date).getTime()
+          );
+        allMovies = [...allMovies, ...weightedMovies];
+      }
+      setPopularMovies((prev) => [...prev, ...allMovies]);
     } catch (error) {
       console.error("Error fetching popular movies:", error);
     }
@@ -72,13 +80,16 @@ export default function Index() {
 
   const searchMovies = async (text: string) => {
     setQuery(text);
+    setAutocompleteResults([]); // Clear autocomplete dropdown when a search action occurs
     if (text.length > 2) {
+      setMovies([]); // Clear current movies to show a blank page
+      setPopularMovies([]); // Forcefully clear popular movies
       const results = await fetchMovies(text);
-      setMovies(results);
-      setPopularMovies([]); // Clear popular movies when searching
+      setMovies(results); // Replace with search results
     } else {
       setMovies([]);
-      fetchPopularMovies(); // Reload popular movies if search is cleared
+      setPopularMovies([]); // Ensure popular movies are cleared if search is invalid
+      fetchPopularMovies(); // Refresh popular movie feeds
     }
   };
 
@@ -136,7 +147,17 @@ export default function Index() {
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
       <View style={styles.header}>
-        <Text style={[styles.title, isDarkMode && styles.darkText]}>eyelevel</Text>
+        <Text
+          style={[styles.title, isDarkMode && styles.darkText]}
+          onPress={() => {
+            setMovies([]); // Clear search results
+            setPopularMovies([]); // Reset popular movies
+            fetchPopularMovies(); // Reload popular movies
+            router.push("/"); // Navigate to home page
+          }}
+        >
+          eyelevel
+        </Text>
         <View style={styles.headerRight}>
           <MaterialIcons
             name={isDarkMode ? "nights-stay" : "wb-sunny"}
@@ -158,26 +179,31 @@ export default function Index() {
         </View>
       </View>
       <View
-        style={[
-          styles.searchContainer,
-          {
-            backgroundColor: isDarkMode ? "#333" : "#fff", // Match searchBar background
-            borderColor: isDarkMode ? "#555" : "#ccc", // Match searchBar borderColor
-          },
-        ]}
+        style={{
+          ...styles.searchContainer,
+          zIndex: 200, // Ensure parent container has a high zIndex
+        }}
       >
         <TextInput
           style={styles.searchBar}
           placeholder="Search for movies..."
           value={query}
           onChangeText={handleAutocomplete}
-          onSubmitEditing={() => searchMovies(query)} // Trigger search on submit
+          onSubmitEditing={() => searchMovies(query)}
         />
         <TouchableOpacity style={styles.searchButton} onPress={() => searchMovies(query)}>
           <Text style={[styles.searchButtonText, { color: isDarkMode ? "#fff" : "#000" }]}>🔍</Text>
         </TouchableOpacity>
         {autocompleteResults.length > 0 && (
-          <View style={styles.autocompleteDropdown}>
+          <View
+            style={{
+              ...styles.autocompleteDropdown,
+              backgroundColor: "rgba(255, 255, 255, 0.9)",
+              zIndex: 300, // Ensure dropdown has the highest zIndex
+              elevation: 20, // Add sufficient elevation for Android
+              overflow: "visible", // Ensure dropdown is not clipped
+            }}
+          >
             {autocompleteResults.map((result) => (
               <TouchableOpacity
                 key={result.id}
