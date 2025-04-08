@@ -1,9 +1,12 @@
 import React from "react";
 import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
+import { useRouter } from "expo-router"; // Import useRouter for navigation
 
 export default function WatchlistItem({ item, onRemove }: { item: any; onRemove: () => void }) {
+    const router = useRouter(); // Initialize router
+
     return (
-        <View style={styles.container}>
+        <TouchableOpacity onPress={() => router.push(`/movie/${item.id}`)} style={styles.container}> {/* Navigate to movie detail */}
             <Image
                 source={{ uri: `https://image.tmdb.org/t/p/w200${item.poster_path}` }}
                 style={styles.poster}
@@ -16,7 +19,7 @@ export default function WatchlistItem({ item, onRemove }: { item: any; onRemove:
             <TouchableOpacity onPress={onRemove}>
                 <Text style={styles.removeButton}>Remove</Text>
             </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
     );
 }
 

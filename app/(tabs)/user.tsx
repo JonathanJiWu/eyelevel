@@ -5,11 +5,13 @@ import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { useTheme } from "../_layout"; // Import useTheme
 import { MaterialIcons } from "@expo/vector-icons"; // Add this import
+import { useRouter } from "expo-router"; // Import useRouter for navigation
 
 export default function MyMovies() {
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [watchlist, setWatchlist] = useState<any[]>([]); // Ensure watchlist is an array
     const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
+    const router = useRouter(); // Initialize router
 
     const fetchUserData = async () => {
         const user = auth.currentUser;
@@ -43,29 +45,15 @@ export default function MyMovies() {
     };
 
     const handleSignOut = async () => {
-        Alert.alert(
-            "Sign Out",
-            "Are you sure you want to sign out?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Sign Out",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await signOut(auth); // Ensure signOut is called correctly
-                            setUserEmail(null); // Clear user email
-                            setWatchlist([]); // Clear watchlist
-                            alert("Signed out successfully.");
-                        } catch (error) {
-                            console.error("Error signing out:", error);
-                            alert("Failed to sign out. Please try again.");
-                        }
-                    },
-                },
-            ],
-            { cancelable: true }
-        );
+        try {
+            await signOut(auth); // Ensure signOut is called correctly
+            setUserEmail(null); // Clear user email
+            setWatchlist([]); // Clear watchlist
+            Alert.alert("Success", "Signed out successfully."); // Use Alert for consistent UI feedback
+        } catch (error) {
+            console.error("Error signing out:", error);
+            Alert.alert("Error", "Failed to sign out. Please try again."); // Use Alert for error feedback
+        }
     };
 
     const renderHeaderRight = () => (
@@ -76,10 +64,44 @@ export default function MyMovies() {
                 color={isDarkMode ? "#fff" : "#000"}
             />
             <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
-            <TouchableOpacity onPress={handleSignOut}>
-                <Text style={[styles.signOutButton, isDarkMode && styles.darkText]}>Sign Out</Text>
-            </TouchableOpacity>
+            {userEmail ? (
+                <TouchableOpacity onPress={handleSignOut}>
+                    <Text style={[styles.signOutButton, isDarkMode && styles.darkText]}>Sign Out</Text>
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity onPress={() => router.push("/login")}> {/* Navigate to login page */}
+                    <Text style={[styles.signOutButton, isDarkMode && styles.darkText]}>Sign In</Text>
+                </TouchableOpacity>
+            )}
         </View>
+    );
+
+    const renderWatchlistItem = ({ item }: { item: any }) => (
+        <TouchableOpacity
+            style={[styles.watchlistItem, isDarkMode && styles.darkItem]}
+            onPress={() => router.push(`/movie/${item.id}`)} // Navigate to movie detail page
+        >
+            <Image
+                source={{ uri: `https://image.tmdb.org/t/p/w200${item.poster_path}` }}
+                style={styles.poster}
+            />
+            <View style={styles.movieDetails}>
+                <Text style={[styles.movieTitle, isDarkMode && styles.darkText]}>
+                    {item.title || "Unknown Title"}
+                </Text>
+                <Text style={[styles.movieInfo, isDarkMode && styles.darkText]}>
+                    Year: {item.release_date?.split("-")[0] || "N/A"}
+                </Text>
+                <Text style={[styles.movieInfo, isDarkMode && styles.darkText]}>
+                    Director: {item.director || "Unknown"}
+                </Text>
+            </View>
+            <TouchableOpacity onPress={() => removeFromWatchlist(item)}>
+                <Text style={[styles.removeButton, isDarkMode && styles.darkText]}>
+                    Remove
+                </Text>
+            </TouchableOpacity>
+        </TouchableOpacity>
     );
 
     return (
@@ -98,30 +120,7 @@ export default function MyMovies() {
             <FlatList
                 data={watchlist}
                 keyExtractor={(item) => item.id?.toString() || Math.random().toString()} // Ensure unique key
-                renderItem={({ item }) => (
-                    <View style={[styles.watchlistItem, isDarkMode && styles.darkItem]}>
-                        <Image
-                            source={{ uri: `https://image.tmdb.org/t/p/w200${item.poster_path}` }}
-                            style={styles.poster}
-                        />
-                        <View style={styles.movieDetails}>
-                            <Text style={[styles.movieTitle, isDarkMode && styles.darkText]}>
-                                {item.title || "Unknown Title"}
-                            </Text>
-                            <Text style={[styles.movieInfo, isDarkMode && styles.darkText]}>
-                                Year: {item.release_date?.split("-")[0] || "N/A"}
-                            </Text>
-                            <Text style={[styles.movieInfo, isDarkMode && styles.darkText]}>
-                                Director: {item.director || "Unknown"}
-                            </Text>
-                        </View>
-                        <TouchableOpacity onPress={() => removeFromWatchlist(item)}>
-                            <Text style={[styles.removeButton, isDarkMode && styles.darkText]}>
-                                Remove
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                renderItem={renderWatchlistItem} // Use the updated render function
             />
         </View>
     );
