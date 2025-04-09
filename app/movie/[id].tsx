@@ -98,17 +98,26 @@ export default function MovieDetail() {
         ? `https://image.tmdb.org/t/p/w500${movie.backdrop_path}`
         : null;
 
-    const director = movie?.credits?.crew?.find((crewMember: any) => crewMember.job === "Director")?.name || "Unknown";
+    const director = movie?.credits?.crew?.find((crewMember: any) => crewMember.job === "Director")?.name || "Unknown"; // Define director
     const genres = movie?.genres?.map((genre: any) => genre.name).join(", ") || "N/A";
     const languages = movie?.spoken_languages?.map((lang: any) => lang.english_name).join(", ") || "N/A";
     const cast = movie?.credits?.cast?.slice(0, 5).map((actor: any) => actor.name).join(", ") || "N/A";
 
+    console.log("Backdrop URL:", backdropUrl); // Debugging log
+    console.log("isDarkMode:", isDarkMode); // Debugging log
+
     return (
         <ImageBackground
-            source={backdropUrl ? { uri: backdropUrl } : null}
-            style={[styles.background, isDarkMode && styles.darkBackground]}
-            blurRadius={5}
+            source={backdropUrl ? { uri: backdropUrl } : require("../../assets/images/splash-icon.png")} // Fallback image
+            style={styles.background}
+            imageStyle={styles.imageStyle} // Ensure the image respects styling
         >
+            <View
+                style={[
+                    styles.overlay,
+                    isDarkMode ? styles.darkOverlay : styles.lightOverlay,
+                ]}
+            />
             <ScrollView style={[styles.container, isDarkMode && styles.darkContainer]}>
                 <View style={[styles.contentContainer, isHorizontal && styles.horizontalContentContainer]}>
                     <Image
@@ -141,13 +150,24 @@ const styles = StyleSheet.create({
     background: {
         flex: 1,
     },
-    darkBackground: {
-        backgroundColor: "#121212", // Android's default dark mode background
+    imageStyle: {
+        resizeMode: "cover", // Ensure the image covers the background
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject, // Covers the entire background
+        zIndex: 1, // Ensure it is above the background image
+    },
+    darkOverlay: {
+        backgroundColor: "rgba(0, 0, 0, 0.7)", // Darker overlay for dark mode
+    },
+    lightOverlay: {
+        backgroundColor: "rgba(255, 255, 255, 0.3)", // Brighter overlay for light mode
     },
     container: {
         flex: 1,
         backgroundColor: "rgba(255, 255, 255, 0.9)", // Add transparency for readability
         padding: 20,
+        zIndex: 2, // Ensure content is above the overlay
     },
     darkContainer: {
         backgroundColor: "rgba(18, 18, 18, 0.9)", // Adjusted for dark mode
