@@ -1,50 +1,56 @@
-# Welcome to your Expo app 👋
+# EyeLevel Movie App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+EyeLevel is a React Native application that provides detailed information about movies using the TMDB API. Users can explore movie details, including cast, genres, and directors, and manage their personalized watchlist. The app supports both light and dark modes for an enhanced user experience.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Movie Details**: View detailed information about movies, including cast, genres, languages, and directors.
+- **Watchlist Management**: Add or remove movies from your personalized watchlist.
+- **Responsive Design**: Adapts to both portrait and landscape orientations.
+- **Dark Mode Support**: Automatically adjusts the UI for light and dark modes.
+
+## Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/eyelevel.git
+   cd eyelevel
+   ```
+
+2. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Add your TMDB API key:
+   - Create a `tmdbConfig.ts` file in the `app` directory:
+
+     ```typescript
+     export const TMDB_API_KEY = "your_tmdb_api_key";
+     ```
+
+4. Configure Firebase:
+   - Add your Firebase configuration in `firebaseConfigs.ts`.
+
+5. Run the app:
 
    ```bash
-    npx expo start
+   npm run start
    ```
 
-In the output, you'll find options to open the app in a
+## Technologies Used
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **React Native**: For building the mobile application.
+- **Firebase**: For user authentication and watchlist storage.
+- **TMDB API**: For fetching movie data.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Screenshots
 
-## Get a fresh project
+![Light Mode](./assets/screenshots/light-mode.png)
+![Dark Mode](./assets/screenshots/dark-mode.png)
 
-When you're ready, run:
+## License
 
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
