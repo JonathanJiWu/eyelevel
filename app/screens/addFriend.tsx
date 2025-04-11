@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert, Modal } from "react-native";
 import { auth, db } from "../../firebaseConfigs";
 import { collection, getDocs, query, where, doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
-import { Timestamp } from "firebase/firestore";
-import { differenceInDays } from 'date-fns';
+import { useNavigation } from "@react-navigation/native";
 
 export default function AddFriend() {
     const [searchQuery, setSearchQuery] = useState("");
     const [users, setUsers] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
     const [friends, setFriends] = useState([]);
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const navigation = useNavigation();
 
     useEffect(() => {
         const fetchCurrentUser = async () => {
@@ -21,6 +22,8 @@ export default function AddFriend() {
                 if (userDoc.exists()) {
                     setFriends(userDoc.data().friends || []);
                 }
+            } else {
+                setShowLoginModal(true); // Show modal but stay on the current page
             }
         };
         fetchCurrentUser();
@@ -37,7 +40,9 @@ export default function AddFriend() {
                 ? query(usersRef, where("name", "==", searchQuery))
                 : usersRef; // Use collection reference directly if no query
             const querySnapshot = await getDocs(q);
-            const usersList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            const usersList = querySnapshot.docs
+                .map((doc) => ({ id: doc.id, ...doc.data() }))
+                .filter((user) => user.id !== currentUser?.uid); // Exclude the current user
             setUsers(usersList);
         } catch (error) {
             console.error("Error fetching users:", error);
@@ -46,7 +51,7 @@ export default function AddFriend() {
 
     const toggleFriend = async (friend) => {
         if (!currentUser) {
-            Alert.alert("Error", "You must be signed in to manage friends.");
+            setShowLoginModal(true); // Show modal but do not navigate away
             return;
         }
 
@@ -60,7 +65,7 @@ export default function AddFriend() {
                 Alert.alert("Success", `${friend.name} has been removed from your friend list.`);
             } else {
                 await updateDoc(userDoc, {
-                    friends: arrayUnion(friend),
+                    friends: arrayUnion({ id: friend.id, name: friend.name }), // Adjust the structure here
                 });
                 setFriends((prev) => [...prev, friend]);
                 Alert.alert("Success", `${friend.name} has been added to your friend list.`);
@@ -103,6 +108,31 @@ export default function AddFriend() {
                 renderItem={renderUserItem}
                 ListEmptyComponent={<Text style={styles.emptyText}>No users found.</Text>}
             />
+            <Modal visible={showLoginModal} transparent animationType="slide">
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Login Required</Text>
+                        <Text style={styles.modalText}>You must log in or sign up to manage friends.</Text>
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={styles.modalButton}
+                                onPress={() => {
+                                    setShowLoginModal(false); // Close modal
+                                    navigation.navigate("Login"); // Navigate to login page
+                                }}
+                            >
+                                <Text style={styles.modalButtonText}>Login</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setShowLoginModal(false)} // Close modal without navigating
+                            >
+                                <Text style={styles.modalButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -165,5 +195,50 @@ const styles = StyleSheet.create({
         textAlign: "center",
         color: "#888",
         marginTop: 20,
+    },
+    modalContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+    },
+    modalContent: {
+        width: "80%",
+        padding: 20,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 10,
+        alignItems: "center",
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: "bold",
+        marginBottom: 10,
+        color: "#1A237E",
+    },
+    modalText: {
+        fontSize: 16,
+        color: "#3C4858",
+        textAlign: "center",
+        marginBottom: 20,
+    },
+    modalButtons: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        width: "100%",
+    },
+    modalButton: {
+        flex: 1,
+        backgroundColor: "#5C6BC0",
+        padding: 10,
+        borderRadius: 5,
+        alignItems: "center",
+        marginHorizontal: 5,
+    },
+    cancelButton: {
+        backgroundColor: "#E57373",
+    },
+    modalButtonText: {
+        color: "#FFFFFF",
+        fontWeight: "bold",
     },
 });
