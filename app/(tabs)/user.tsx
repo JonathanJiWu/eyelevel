@@ -13,6 +13,7 @@ export default function MyMovies() {
     const [watchlist, setWatchlist] = useState<any[]>([]); // Ensure watchlist is an array
     const { isDarkMode, toggleDarkMode } = useTheme(); // Use theme context
     const router = useRouter(); // Initialize router
+    const [isEditingName, setIsEditingName] = useState(false); // State to toggle edit mode
 
     const fetchUserData = async () => {
         const user = auth.currentUser;
@@ -72,6 +73,13 @@ export default function MyMovies() {
         }
     };
 
+    const handleEditNameToggle = async () => {
+        if (isEditingName && userName) {
+            await updateUserName(userName); // Save the new name when toggling off
+        }
+        setIsEditingName((prev) => !prev); // Toggle edit mode
+    };
+
     const renderHeaderRight = () => (
         <View style={styles.headerRight}>
             <MaterialIcons
@@ -128,11 +136,8 @@ export default function MyMovies() {
             <View style={styles.header}>
                 <Text
                     style={[styles.title, isDarkMode && styles.darkText]}
-                    onPress={async () => {
-                        setMovies([]); // Clear search results
-                        setPopularMovies([]); // Reset popular movies
-                        await fetchPopularMovies(1, 5); // Reload 100 movies (5 pages of 20 movies each)
-                        router.replace("/"); // Use replace to ensure a full refresh of the index page
+                    onPress={() => {
+                        router.replace("/"); // Navigate to the index page
                     }}
                 >
                     eyelevel
@@ -141,12 +146,22 @@ export default function MyMovies() {
             </View>
             <Text style={[styles.label, isDarkMode && styles.darkText]}>Name:</Text>
             <TextInput
-                style={[styles.input, isDarkMode && styles.darkInput]} // Add input styling
+                style={[
+                    styles.input,
+                    isDarkMode && styles.darkInput,
+                    !isEditingName && styles.disabledInput, // Apply disabled style when not editing
+                ]}
                 value={userName || ""}
-                onChangeText={updateUserName} // Update name on change
+                onChangeText={setUserName} // Update state directly
+                editable={isEditingName} // Disable input when not in edit mode
                 placeholder="Enter your name"
                 placeholderTextColor={isDarkMode ? "#888" : "#ccc"}
             />
+            <TouchableOpacity onPress={handleEditNameToggle} style={styles.editButton}>
+                <Text style={[styles.editButtonText, isDarkMode && styles.darkText]}>
+                    {isEditingName ? "Save My New Name" : "Edit My Name"}
+                </Text>
+            </TouchableOpacity>
             <Text style={[styles.label, isDarkMode && styles.darkText]}>Email:</Text>
             <Text style={[styles.value, isDarkMode && styles.darkText]}>
                 {userEmail || "Not logged in"}
@@ -166,6 +181,7 @@ export default function MyMovies() {
 
 const FriendsList = () => {
     const [friends, setFriends] = useState([]);
+    const { isDarkMode } = useTheme(); // Use theme context
 
     useEffect(() => {
         const fetchFriends = async () => {
@@ -181,20 +197,31 @@ const FriendsList = () => {
     }, []);
 
     const renderFriendItem = ({ item }) => (
-        <View style={styles.friendItem}>
-            <Text style={styles.friendName}>{item.name || "Unknown User"}</Text>
-            <Text style={styles.friendEmail}>{item.email}</Text>
+        <View style={[styles.friendItem, isDarkMode && styles.darkItem]}>
+            <Text style={[styles.friendName, isDarkMode && styles.darkText]}>
+                {item.name || "Unknown User"}
+            </Text>
+            <Text style={[styles.friendEmail, isDarkMode && styles.darkText]}>
+                {item.email}
+            </Text>
         </View>
     );
 
     return (
-        <View style={styles.friendsContainer}>
-            <Text style={styles.friendsTitle}>Friends List</Text>
+        <View style={[styles.friendsContainer, isDarkMode && styles.darkContainer]}>
+            <Text style={[styles.friendsTitle, isDarkMode && styles.darkText]}>
+                Friends List
+            </Text>
             <FlatList
                 data={friends}
                 keyExtractor={(item) => item.id}
                 renderItem={renderFriendItem}
-                ListEmptyComponent={<Text style={styles.emptyText}>No friends found.</Text>}
+                ListEmptyComponent={
+                    <Text style={[styles.emptyText, isDarkMode && styles.darkText]}>
+                        No friends found.
+                    </Text>
+                }
+                contentContainerStyle={{ flexGrow: 1 }} // Ensure FlatList expands fully
             />
         </View>
     );
@@ -204,7 +231,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#FAFAFA",
-        padding: 20,
+        paddingHorizontal: 30, // Increase horizontal padding for better spacing
+        paddingVertical: 20,
+        width: "100%", // Ensure the container takes full width
     },
     darkContainer: {
         backgroundColor: "#121212", // Dark mode background
@@ -225,12 +254,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: "bold",
-        color: "#1A237E",
-    },
-    label: {
-        fontSize: 18,
-        fontWeight: "600",
-        marginTop: 10,
+        label: {
+            fontSize: 20, // Increase font size for better readability
+            fontWeight: "600",
+            marginTop: 15, // Add more spacing for clarity
+            color: "#3C4858",
+        },
         color: "#3C4858",
     },
     value: {
@@ -295,15 +324,33 @@ const styles = StyleSheet.create({
         borderColor: "#555",
         color: "#fff",
     },
+    disabledInput: {
+        backgroundColor: "#f0f0f0", // Greyed-out background
+        color: "#888", // Greyed-out text
+    },
+    editButton: {
+        marginVertical: 10,
+        padding: 10,
+        backgroundColor: "#1A237E",
+        borderRadius: 5,
+        alignItems: "center",
+    },
+    editButtonText: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "bold",
+    },
     addFriendButton: {
         fontSize: 16,
         color: "#000",
         marginLeft: 10,
-    },
     friendsContainer: {
         flex: 1,
         padding: 20,
         backgroundColor: "#FAFAFA",
+        borderRadius: 5, // Add rounded corners
+        width: "100%", // Ensure full width
+    },
     },
     friendsTitle: {
         fontSize: 24,
@@ -316,6 +363,9 @@ const styles = StyleSheet.create({
         backgroundColor: "#E8EAF6",
         borderRadius: 5,
         marginBottom: 10,
+    },
+    darkItem: {
+        backgroundColor: "#1e1e1e", // Dark mode item background
     },
     friendName: {
         fontSize: 16,

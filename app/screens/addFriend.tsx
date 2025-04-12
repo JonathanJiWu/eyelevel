@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert, Modal } from "react-native";
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { auth, db } from "../../firebaseConfigs";
 import { collection, getDocs, query, where, doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { useNavigation } from "@react-navigation/native";
@@ -9,8 +9,6 @@ export default function AddFriend() {
     const [users, setUsers] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
     const [friends, setFriends] = useState([]);
-    const [showLoginModal, setShowLoginModal] = useState(false);
-    const navigation = useNavigation();
 
     useEffect(() => {
         const fetchCurrentUser = async () => {
@@ -22,8 +20,6 @@ export default function AddFriend() {
                 if (userDoc.exists()) {
                     setFriends(userDoc.data().friends || []);
                 }
-            } else {
-                setShowLoginModal(true); // Show modal but stay on the current page
             }
         };
         fetchCurrentUser();
@@ -51,7 +47,6 @@ export default function AddFriend() {
 
     const toggleFriend = async (friend) => {
         if (!currentUser) {
-            setShowLoginModal(true); // Show modal but do not navigate away
             return;
         }
 
@@ -108,31 +103,6 @@ export default function AddFriend() {
                 renderItem={renderUserItem}
                 ListEmptyComponent={<Text style={styles.emptyText}>No users found.</Text>}
             />
-            <Modal visible={showLoginModal} transparent animationType="slide">
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Login Required</Text>
-                        <Text style={styles.modalText}>You must log in or sign up to manage friends.</Text>
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={() => {
-                                    setShowLoginModal(false); // Close modal
-                                    navigation.navigate("Login"); // Navigate to login page
-                                }}
-                            >
-                                <Text style={styles.modalButtonText}>Login</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => setShowLoginModal(false)} // Close modal without navigating
-                            >
-                                <Text style={styles.modalButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 }
@@ -195,50 +165,5 @@ const styles = StyleSheet.create({
         textAlign: "center",
         color: "#888",
         marginTop: 20,
-    },
-    modalContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-    },
-    modalContent: {
-        width: "80%",
-        padding: 20,
-        backgroundColor: "#FFFFFF",
-        borderRadius: 10,
-        alignItems: "center",
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: "bold",
-        marginBottom: 10,
-        color: "#1A237E",
-    },
-    modalText: {
-        fontSize: 16,
-        color: "#3C4858",
-        textAlign: "center",
-        marginBottom: 20,
-    },
-    modalButtons: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        width: "100%",
-    },
-    modalButton: {
-        flex: 1,
-        backgroundColor: "#5C6BC0",
-        padding: 10,
-        borderRadius: 5,
-        alignItems: "center",
-        marginHorizontal: 5,
-    },
-    cancelButton: {
-        backgroundColor: "#E57373",
-    },
-    modalButtonText: {
-        color: "#FFFFFF",
-        fontWeight: "bold",
     },
 });

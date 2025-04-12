@@ -1,10 +1,10 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { Stack } from "expo-router";
-import { useColorScheme, Switch, View, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { useColorScheme, Switch, View, StyleSheet, Text } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 
-const ThemeContext = createContext({ isDarkMode: true, toggleDarkMode: () => { } });
+const ThemeContext = createContext({ isDarkMode: true, toggleDarkMode: () => {} });
 
 export function useTheme() {
   return useContext(ThemeContext);
@@ -12,17 +12,17 @@ export function useTheme() {
 
 export default function RootLayout() {
   const systemColorScheme = useColorScheme();
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode
+  const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === "dark");
 
   useEffect(() => {
-    setIsDarkMode(systemColorScheme === "dark" || true); // Always default to dark mode
+    setIsDarkMode(systemColorScheme === "dark");
   }, [systemColorScheme]);
 
   useEffect(() => {
     // Update the body background color for web
     if (typeof document !== "undefined") {
       document.body.style.backgroundColor = isDarkMode ? "#121212" : "#fff";
-      document.body.style.color = isDarkMode ? "#e0e0e0" : "#000"; // Optional: Set text color
+      document.body.style.color = isDarkMode ? "#e0e0e0" : "#000";
     }
   }, [isDarkMode]);
 
@@ -30,10 +30,9 @@ export default function RootLayout() {
 
   return (
     <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-      {/* Dynamically set the status bar style */}
       <StatusBar
-        style={isDarkMode ? "light" : "dark"} // Text/icons color
-        backgroundColor={isDarkMode ? "#121212" : "#fff"} // Background color
+        style={isDarkMode ? "light" : "dark"}
+        backgroundColor={isDarkMode ? "#121212" : "#fff"}
         translucent={true}
       />
       <View style={[styles.container, isDarkMode ? styles.dark : styles.light]}>
@@ -41,6 +40,7 @@ export default function RootLayout() {
           screenOptions={{
             headerStyle: { backgroundColor: isDarkMode ? "#121212" : "#fff" },
             headerTintColor: isDarkMode ? "#fff" : "#000",
+            contentStyle: isDarkMode ? styles.dark : styles.light, // Apply theme to screen content
             headerRight: () => (
               <View style={styles.headerRight}>
                 <MaterialIcons
@@ -49,11 +49,6 @@ export default function RootLayout() {
                   color={isDarkMode ? "#fff" : "#000"}
                 />
                 <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
-                <TouchableOpacity>
-                  <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
-                    Sign In
-                  </Text>
-                </TouchableOpacity>
               </View>
             ),
           }}
@@ -84,12 +79,5 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  signInText: {
-    fontSize: 16,
-    color: "#000",
-  },
-  darkText: {
-    color: "#fff",
   },
 });
