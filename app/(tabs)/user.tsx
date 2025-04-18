@@ -196,7 +196,7 @@ const FriendsList = () => {
         fetchFriends();
     }, []);
 
-    const renderFriendItem = ({ item }) => (
+    const renderFriendItem = ({ item }: { item: { id: string; name: string; email: string } }) => (
         <View style={[styles.friendItem, isDarkMode && styles.darkItem]}>
             <Text style={[styles.friendName, isDarkMode && styles.darkText]}>
                 {item.name || "Unknown User"}
@@ -254,12 +254,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: "bold",
-        label: {
-            fontSize: 20, // Increase font size for better readability
-            fontWeight: "600",
-            marginTop: 15, // Add more spacing for clarity
-            color: "#3C4858",
-        },
+        color: "#3C4858",
+    },
+    label: {
+        fontSize: 20, // Increase font size for better readability
+        fontWeight: "600",
+        marginTop: 15, // Add more spacing for clarity
         color: "#3C4858",
     },
     value: {
@@ -344,13 +344,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: "#000",
         marginLeft: 10,
+    },
     friendsContainer: {
         flex: 1,
         padding: 20,
         backgroundColor: "#FAFAFA",
         borderRadius: 5, // Add rounded corners
         width: "100%", // Ensure full width
-    },
     },
     friendsTitle: {
         fontSize: 24,

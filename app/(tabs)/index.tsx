@@ -1,5 +1,6 @@
 import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform, Animated, Switch } from "react-native";
 import { useState, useEffect } from "react";
+import { User } from "firebase/auth"; // Add this import at the top of the file
 import axios from "axios";
 import { TMDB_API_KEY } from "../../tmdbConfig";
 import { auth, db } from "../../firebaseConfigs";
@@ -12,12 +13,12 @@ import { MaterialIcons } from "@expo/vector-icons"; // Add this import
 export default function Index() {
   const [query, setQuery] = useState("");
   const [movies, setMovies] = useState([]);
-  const [popularMovies, setPopularMovies] = useState([]); // Add popular movies state
-  const [autocompleteResults, setAutocompleteResults] = useState([]);
-  const [page, setPage] = useState(1);
-  const [user, setUser] = useState(null);
+  const [popularMovies, setPopularMovies] = useState<Array<{ id: number; title: string; release_date: string; adult: boolean; poster_path: string }>>([]); // Add popular movies state
+  const [autocompleteResults, setAutocompleteResults] = useState<Array<{ id: number; title: string }>>([]);
+  const [user, setUser] = useState<User | null>(null);
   const [numColumns, setNumColumns] = useState(2);
   const [addedMovie, setAddedMovie] = useState<string | null>(null);
+  const [page, setPage] = useState(1); // Add page state
   const router = useRouter();
   const { isDarkMode, toggleDarkMode } = useTheme();
 
@@ -58,15 +59,15 @@ export default function Index() {
 
   const fetchPopularMovies = async (startPage = 1, totalPages = 1) => {
     try {
-      let allMovies = [];
+      let allMovies: Array<{ id: number; title: string; release_date: string; adult: boolean; poster_path: string }> = [];
       for (let page = startPage; page < startPage + totalPages; page++) {
         const response = await axios.get(
           `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
         );
         const weightedMovies = response.data.results
-          .filter((movie) => !movie.adult)
+          .filter((movie: { adult: boolean }) => !movie.adult)
           .sort(
-            (a, b) =>
+            (a: { release_date: string }, b: { release_date: string }) =>
               new Date(b.release_date).getTime() -
               new Date(a.release_date).getTime()
           );
