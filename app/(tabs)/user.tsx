@@ -364,9 +364,9 @@ const styles = StyleSheet.create({
         borderRadius: 5,
         marginBottom: 10,
     },
-    darkItem: {
-        backgroundColor: "#1e1e1e", // Dark mode item background
-    },
+    // darkItem: {
+    //     backgroundColor: "#1e1e1e", // Dark mode item background
+    // },
     friendName: {
         fontSize: 16,
         color: "#3C4858",
