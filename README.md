@@ -14,7 +14,7 @@ EyeLevel is a React Native application that provides detailed information about 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/eyelevel.git
+   git clone https://github.com/JonathanJiWu/eyelevel.git
    cd eyelevel
    ```
 
