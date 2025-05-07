@@ -1,6 +1,7 @@
 import axios from "axios";
 import { TMDB_API_KEY } from "../../tmdbConfig";
 
+// Consolidated API-related logic
 export const fetchPopularMovies = async (page: number) => {
     const response = await axios.get(
         `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`

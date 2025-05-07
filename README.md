@@ -25,14 +25,14 @@ EyeLevel is a React Native application that provides detailed information about 
    ```
 
 3. Add your TMDB API key:
-   - Create a `tmdbConfig.ts` file in the `app` directory:
+   - Update the `app/config/tmdbConfig.ts` file:
 
      ```typescript
      export const TMDB_API_KEY = "your_tmdb_api_key";
      ```
 
 4. Configure Firebase:
-   - Add your Firebase configuration in `firebaseConfigs.ts`.
+   - Update the `app/config/firebaseConfigs.ts` file with your Firebase configuration.
 
 5. Run the app:
 
@@ -45,11 +45,6 @@ EyeLevel is a React Native application that provides detailed information about 
 - **React Native**: For building the mobile application.
 - **Firebase**: For user authentication and watchlist storage.
 - **TMDB API**: For fetching movie data.
-
-## Screenshots
-
-![Light Mode](./assets/screenshots/light-mode.png)
-![Dark Mode](./assets/screenshots/dark-mode.png)
 
 ## License
 

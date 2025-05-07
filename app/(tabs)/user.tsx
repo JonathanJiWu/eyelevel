@@ -181,7 +181,7 @@ export default function MyMovies() {
 
 const FriendsList = () => {
     const [friends, setFriends] = useState([]);
-    const { isDarkMode } = useTheme(); // Use theme context
+    const { isDarkMode } = useTheme();
 
     useEffect(() => {
         const fetchFriends = async () => {
@@ -221,7 +221,7 @@ const FriendsList = () => {
                         No friends found.
                     </Text>
                 }
-                contentContainerStyle={{ flexGrow: 1 }} // Ensure FlatList expands fully
+                contentContainerStyle={{ flexGrow: 1 }}
             />
         </View>
     );
@@ -364,9 +364,6 @@ const styles = StyleSheet.create({
         borderRadius: 5,
         marginBottom: 10,
     },
-    // darkItem: {
-    //     backgroundColor: "#1e1e1e", // Dark mode item background
-    // },
     friendName: {
         fontSize: 16,
         color: "#3C4858",
