@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import IndexScreen from '../screens/IndexScreen';
 import UserScreen from '../screens/UserScreen';
 import { useTheme } from '../_layout';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const Tab = createBottomTabNavigator();
 
@@ -28,7 +28,7 @@ export default function TabNavigator() {
                 name="Home"
                 component={IndexScreen}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
+                    tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                         <MaterialIcons name="home" size={size} color={color} />
                     ),
                 }}
@@ -37,7 +37,7 @@ export default function TabNavigator() {
                 name="My Movies"
                 component={UserScreen}
                 options={{
-                    tabBarIcon: ({ color, size }) => (
+                    tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                         <MaterialIcons name="movie" size={size} color={color} />
                     ),
                 }}

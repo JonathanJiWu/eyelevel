@@ -11,6 +11,16 @@ import { useTheme } from "../_layout";
 import { MaterialIcons } from "@expo/vector-icons";
 import HeaderBar from "../components/HeaderBar";
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  darkContainer: {
+    backgroundColor: '#121212',
+  },
+});
+
 export default function IndexScreen() {
     const { isDarkMode, toggleDarkMode } = useTheme();
     const router = useRouter();
@@ -18,15 +28,7 @@ export default function IndexScreen() {
 
     return (
         <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-            <HeaderBar
-                title="Home"
-                isSignedIn={!!user}
-                onSignOut={() => {
-                    signOut(auth);
-                    router.replace("/login");
-                }}
-                onToggleDarkMode={toggleDarkMode}
-            />
+            <HeaderBar title="Home" />
             {/* ...existing content of IndexScreen... */}
         </View>
     );

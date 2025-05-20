@@ -23,9 +23,9 @@ export default function MovieDetail() {
         };
 
         updateOrientation();
-        Dimensions.addEventListener("change", updateOrientation);
+        const subscription = Dimensions.addEventListener("change", updateOrientation);
 
-        return () => Dimensions.removeEventListener("change", updateOrientation);
+        return () => subscription?.remove();
     }, []);
 
     useEffect(() => {

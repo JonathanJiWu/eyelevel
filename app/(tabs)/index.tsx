@@ -167,7 +167,7 @@ export default function Index() {
           />
           <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
           {user ? (
-            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}> {/* Navigate to MyMovies tab */}
               <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
                 Hello, {user?.displayName || user?.email || "User"}
               </Text>

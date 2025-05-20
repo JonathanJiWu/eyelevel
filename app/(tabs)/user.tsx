@@ -80,6 +80,10 @@ export default function MyMovies() {
         setIsEditingName((prev) => !prev); // Toggle edit mode
     };
 
+    const handleGoToMyMovies = () => {
+        router.replace("/(tabs)/user"); // Use the correct, type-safe route string for the MyMovies tab
+    };
+
     const renderHeaderRight = () => (
         <View style={styles.headerRight}>
             <MaterialIcons
@@ -97,9 +101,6 @@ export default function MyMovies() {
                     <Text style={[styles.signOutButton, isDarkMode && styles.darkText]}>Sign In</Text>
                 </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => router.push("/screens/addFriend")}> {/* Navigate to addFriend page */}
-                <Text style={[styles.addFriendButton, isDarkMode && styles.darkText]}>Add Friend</Text>
-            </TouchableOpacity>
         </View>
     );
 
@@ -136,12 +137,15 @@ export default function MyMovies() {
             <View style={styles.header}>
                 <Text
                     style={[styles.title, isDarkMode && styles.darkText]}
-                    onPress={() => {
-                        router.replace("/"); // Navigate to the index page
-                    }}
+                    onPress={() => router.replace("/(tabs)")}
                 >
                     eyelevel
                 </Text>
+                {userName && (
+                    <TouchableOpacity onPress={handleGoToMyMovies} style={{ marginRight: 10 }}>
+                        <Text style={[styles.value, isDarkMode && styles.darkText]}>Hello, {userName}</Text>
+                    </TouchableOpacity>
+                )}
                 {renderHeaderRight()}
             </View>
             <Text style={[styles.label, isDarkMode && styles.darkText]}>Name:</Text>
