@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { connectAuthEmulator, type Auth } from "firebase/auth";
-import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, type Firestore } from "firebase/firestore";
+import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, waitForPendingWrites, type Firestore } from "firebase/firestore";
 import {
   authEmulatorPort,
   emulatorHost,
@@ -43,6 +43,9 @@ export function getFirebase(): FirebaseServices {
   if (useFirebaseEmulators) {
     connectAuthEmulator(auth, `http://${emulatorHost}:${authEmulatorPort}`, { disableWarnings: true });
     connectFirestoreEmulator(db, emulatorHost, firestoreEmulatorPort);
+    // Test hook (emulator builds only): lets end-to-end tests wait until all
+    // local writes are acknowledged before reloading the page.
+    (window as unknown as { __eyelevel?: object }).__eyelevel = { waitForPendingWrites: () => waitForPendingWrites(db) };
   }
   services = { app, auth, db };
   return services;

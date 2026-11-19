@@ -185,8 +185,19 @@ export default function DiscoverScreen() {
         </AppText>
       </View>
     ) : (
-      <View style={styles.footer} />
+      <View style={styles.footer}>
+        <Button title="Show more movies" variant="secondary" size="sm" onPress={feed.loadMore} testID="load-more" />
+      </View>
     );
+
+  // Tall screens: if the loaded movies don't fill the viewport there is
+  // nothing to scroll, so keep loading pages until they do.
+  const [listHeight, setListHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  useEffect(() => {
+    if (feed.status !== "ready" || !feed.hasMore || feed.loadingMore || feed.loadMoreError) return;
+    if (listHeight > 0 && contentHeight > 0 && contentHeight < listHeight + 200) feed.loadMore();
+  }, [feed, listHeight, contentHeight]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -262,6 +273,15 @@ export default function DiscoverScreen() {
         ListFooterComponent={footer}
         onEndReached={feed.loadMore}
         onEndReachedThreshold={0.6}
+        // FlatList's onEndReached can miss on web; also check the distance to
+        // the end on every scroll (loadMore ignores duplicate calls).
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          if (contentSize.height - (contentOffset.y + layoutMeasurement.height) < layoutMeasurement.height * 0.6) feed.loadMore();
+        }}
+        scrollEventThrottle={100}
+        onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_w, h) => setContentHeight(h)}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={numColumns * 4}
         windowSize={7}

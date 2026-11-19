@@ -42,6 +42,8 @@ export function TabHeader() {
   );
 }
 
+const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
+
 /** Header right side: theme toggle + account shortcut. */
 export function HeaderActions() {
   const { isDark, toggle } = useTheme();
@@ -56,7 +58,7 @@ export function HeaderActions() {
         onPress={toggle}
         testID="theme-toggle"
       />
-      {initializing ? null : user ? (
+      {initializing || (!user && AUTH_ROUTES.includes(pathname)) ? null : user ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Your profile"

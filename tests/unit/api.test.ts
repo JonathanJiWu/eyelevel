@@ -258,5 +258,7 @@ describe("caching, retries and failure handling", () => {
     expect(limited.headers.get("retry-after")).toBeTruthy();
     // Other clients are unaffected.
     expect((await genresRoute(req("/api/genres", { "x-forwarded-for": "198.51.100.1" }))).status).toBe(200);
+    // A spoofed first hop doesn't escape the limit: the proxy-appended last hop is used.
+    expect((await genresRoute(req("/api/genres", { "x-forwarded-for": "1.2.3.4, 203.0.113.7" }))).status).toBe(429);
   });
 });

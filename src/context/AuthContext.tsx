@@ -25,6 +25,7 @@ import {
   updateProfile as updateAuthProfile,
   type User,
 } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDoc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc } from "firebase/firestore";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
@@ -88,6 +89,19 @@ interface PendingRegistration {
   email: string;
   displayName: string;
   username: string;
+}
+
+// The chosen username survives a reload during sign-up (account setup is a
+// separate write after the Firebase Auth account is created).
+const PENDING_KEY = "eyelevel.pendingRegistration";
+async function readPendingRegistration(email: string | null): Promise<PendingRegistration | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_KEY);
+    const value = raw ? (JSON.parse(raw) as PendingRegistration) : null;
+    return value && email && value.email.toLowerCase() === email.toLowerCase() ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -200,7 +214,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-      const registration = pending.current && pending.current.email === current.email ? pending.current : null;
+      const registration =
+        pending.current && current.email && pending.current.email.toLowerCase() === current.email.toLowerCase()
+          ? pending.current
+          : await readPendingRegistration(current.email);
       const fallbackName =
         registration?.displayName ||
         existing?.name ||
@@ -219,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setupAccountWithGeneratedUsername(db, base);
       }
       pending.current = null;
+      AsyncStorage.removeItem(PENDING_KEY).catch(() => undefined);
       // Legacy friends were one-directional; invite them to confirm instead of
       // silently creating friendships they never agreed to.
       const legacyFriends = Array.isArray(existing?.friends) ? existing!.friends : [];
@@ -255,7 +273,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { auth } = getFirebase();
       const email = input.email.trim();
       pending.current = { email, displayName: input.displayName, username: input.username.trim() };
-      const credential = await createUserWithEmailAndPassword(auth, email, input.password);
+      await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(pending.current)).catch(() => undefined);
+      let credential;
+      try {
+        credential = await createUserWithEmailAndPassword(auth, email, input.password);
+      } catch (error) {
+        pending.current = null;
+        AsyncStorage.removeItem(PENDING_KEY).catch(() => undefined);
+        throw error;
+      }
       await updateAuthProfile(credential.user, { displayName: sanitizeText(input.displayName, 40) }).catch(() => undefined);
       sendEmailVerification(credential.user).catch(() => undefined);
       await ensureAccount(credential.user);

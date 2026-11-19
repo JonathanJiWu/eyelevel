@@ -36,6 +36,9 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
   const [attempt, setAttempt] = useState(0);
   const controller = useRef<AbortController | null>(null);
   const seen = useRef(new Set<number>());
+  // Synchronous guard: several triggers (scroll, end-reached, auto-fill) can
+  // fire in the same frame, before the loadingMore state has updated.
+  const loadingRef = useRef(false);
 
   const trimmed = query.trim();
   const searching = trimmed.length >= MIN_QUERY_LENGTH;
@@ -58,6 +61,7 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
     setError(null);
     setLoadMoreError(null);
     setLoadingMore(false);
+    loadingRef.current = false;
     setMovies([]);
     setPage(0);
     fetchPage(1, ac.signal)
@@ -83,9 +87,10 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
   const hasMore = status === "ready" && page < totalPages;
 
   const loadMore = useCallback(() => {
-    if (!hasMore || loadingMore || !controller.current) return;
+    if (!hasMore || loadingMore || loadingRef.current || !controller.current) return;
     const signal = controller.current.signal;
     const next = page + 1;
+    loadingRef.current = true;
     setLoadingMore(true);
     setLoadMoreError(null);
     fetchPage(next, signal)
@@ -102,7 +107,9 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
         setLoadMoreError(friendlyError(e, "We couldn't load more movies."));
       })
       .finally(() => {
-        if (!signal.aborted) setLoadingMore(false);
+        if (signal.aborted) return;
+        loadingRef.current = false;
+        setLoadingMore(false);
       });
   }, [hasMore, loadingMore, page, fetchPage]);
 

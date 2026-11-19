@@ -1,4 +1,4 @@
-import { expect, test, trackErrors } from "./helpers";
+import { expect, patchPage, test, trackErrors } from "./helpers";
 
 const card = (page: import("@playwright/test").Page, title: string) =>
   page.getByTestId("movie-grid").getByRole("link", { name: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(,|$)`) });
@@ -83,18 +83,27 @@ test.describe("discovery", () => {
     await page.goto("/");
     const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
     await expect(cards.first()).toBeVisible();
-    const initial = await cards.count();
-    expect(initial).toBe(20);
-    for (let i = 0; i < 6 && (await cards.count()) <= 40; i++) {
-      await page.getByTestId("movie-grid").evaluate((el) => {
-        const scroller = [el, ...el.querySelectorAll("*")].find((n) => n.scrollHeight > n.clientHeight + 10 && getComputedStyle(n).overflowY !== "visible");
-        (scroller ?? el).scrollTop = 1e9;
-      });
-      await page.waitForTimeout(500);
+    expect(await cards.count()).toBe(20);
+    // Scroll like a person does (wheel events), until two more pages loaded.
+    await page.getByTestId("movie-grid").hover();
+    for (let i = 0; i < 15 && (await cards.count()) <= 40; i++) {
+      await page.mouse.wheel(0, 1200);
+      await page.waitForTimeout(300);
     }
     await expect.poll(() => cards.count()).toBeGreaterThan(40);
     const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test("tall screens keep loading until the viewport is filled", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 2600 } });
+    const page = patchPage(await context.newPage());
+    await page.goto("/");
+    const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
+    await expect(cards.first()).toBeVisible();
+    // No scrolling: the first page (3 rows) doesn't fill 2600px, so more load automatically.
+    await expect.poll(() => cards.count()).toBeGreaterThan(20);
+    await context.close();
   });
 
   test("API failures show a recoverable error state", async ({ page }) => {

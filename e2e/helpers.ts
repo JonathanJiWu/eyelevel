@@ -9,14 +9,28 @@ export { expect };
  */
 export function patchPage(page: Page): Page {
   const waitForApp = () => page.waitForSelector('html[data-hydrated="true"]', { state: "attached", timeout: 30_000 });
+  // A full page load drops Firestore writes that are still in flight (the app
+  // keeps no offline cache). Wait for pending writes first, like a person
+  // would naturally do by not reloading mid-save.
+  const settle = () =>
+    page
+      .evaluate(() =>
+        Promise.race([
+          (window as unknown as { __eyelevel?: { waitForPendingWrites(): Promise<void> } }).__eyelevel?.waitForPendingWrites(),
+          new Promise((resolve) => setTimeout(resolve, 10_000)),
+        ]),
+      )
+      .catch(() => undefined);
   const goto = page.goto.bind(page);
   const reload = page.reload.bind(page);
   page.goto = (async (...args: Parameters<Page["goto"]>) => {
+    await settle();
     const response = await goto(...args);
     await waitForApp();
     return response;
   }) as Page["goto"];
   page.reload = (async (...args: Parameters<Page["reload"]>) => {
+    await settle();
     const response = await reload(...args);
     await waitForApp();
     return response;

@@ -50,6 +50,7 @@ test("watchlists: create, add, organize, rate, persist and delete", async ({ pag
   await page.getByTestId("list-picker-new").click();
   await page.getByTestId("new-list-name").fill("Classics");
   await page.getByTestId("list-picker-save").click();
+  await expect(page.getByTestId("list-picker")).toBeHidden();
   await expect(page.getByText("Saved in: Classics")).toBeVisible();
 
   // Rate and mark watched.

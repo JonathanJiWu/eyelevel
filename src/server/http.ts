@@ -64,9 +64,20 @@ const BUCKET_CAPACITY = Number(process.env.API_RATE_LIMIT_BURST) || 120;
 const REFILL_PER_SECOND = Number(process.env.API_RATE_LIMIT_PER_SECOND) || 4;
 const buckets = new Map<string, { tokens: number; updatedAt: number }>();
 
+/**
+ * Client address for rate limiting. Clients can put anything at the start of
+ * X-Forwarded-For, so use the value added by the platform: Vercel's own
+ * header, otherwise the LAST X-Forwarded-For entry (appended by the proxy in
+ * front of the Node server).
+ */
 export function clientKey(request: Request): string {
+  const vercel = request.headers.get("x-vercel-forwarded-for");
+  if (vercel) return vercel.split(",")[0].trim();
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  if (forwarded) {
+    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
   return request.headers.get("x-real-ip") ?? "local";
 }
 
