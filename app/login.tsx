@@ -1,148 +1,98 @@
-import { Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
-import React, { useState } from 'react';
-import { auth } from '../firebaseConfigs';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
-import { router } from 'expo-router';
+import { Link, Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Platform, View } from "react-native";
+import { AuthLayout, safeRedirect } from "@/src/components/auth/AuthLayout";
+import { AppText } from "@/src/components/ui/AppText";
+import { Button } from "@/src/components/ui/Button";
+import { LoadingState, Notice } from "@/src/components/ui/States";
+import { TextField } from "@/src/components/ui/TextField";
+import { googleSignInEnabled } from "@/src/config/env";
+import { useAuth } from "@/src/context/AuthContext";
+import { useTheme } from "@/src/context/ThemeContext";
+import { friendlyError } from "@/src/lib/errors";
+import { validateEmail } from "@/src/lib/validation";
 
-const index = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+export default function LoginScreen() {
+  const params = useLocalSearchParams<{ redirect?: string; email?: string }>();
+  const redirect = safeRedirect(params.redirect);
+  const router = useRouter();
+  const { colors } = useTheme();
+  const { configured, initializing, user, signIn, signInWithGoogle } = useAuth();
+  const [email, setEmail] = useState(typeof params.email === "string" ? params.email : "");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ email?: string | null; password?: string | null; form?: string | null }>({});
+  const [busy, setBusy] = useState<"password" | "google" | null>(null);
 
-    const signIn = async () => {
-        try {
-            const user = await signInWithEmailAndPassword(auth, email, password);
-            if (user) router.replace('/(tabs)');
-        } catch (error: any) {
-            console.log(error);
-            alert('Sign in failed: ' + error.message);
-        }
-    };
+  if (initializing) return <LoadingState />;
+  if (user && !busy) return <Redirect href={redirect as never} />;
 
-    const signUp = async () => {
-        try {
-            const user = await createUserWithEmailAndPassword(auth, email, password);
-            if (user) router.replace('/(tabs)');
-        } catch (error: any) {
-            console.log(error);
-            alert('Sign up failed: ' + error.message);
-        }
-    };
+  const submit = async () => {
+    const next = { email: validateEmail(email), password: password ? null : "Enter your password." };
+    setErrors(next);
+    if (next.email || next.password) return;
+    setBusy("password");
+    try {
+      await signIn(email, password);
+      router.dismissTo(redirect as never);
+    } catch (e) {
+      setErrors({ form: friendlyError(e, "Sign-in failed. Please try again.") });
+      setBusy(null);
+    }
+  };
 
-    const signInWithGoogle = async () => {
-        try {
-            const provider = new GoogleAuthProvider();
-            const result = await signInWithPopup(auth, provider);
-            if (result.user) router.replace('/(tabs)');
-        } catch (error: any) {
-            console.log(error);
-            alert('Google sign-in failed: ' + error.message);
-        }
-    };
+  const google = async () => {
+    setBusy("google");
+    setErrors({});
+    try {
+      await signInWithGoogle();
+      router.dismissTo(redirect as never);
+    } catch (e) {
+      setErrors({ form: friendlyError(e, "Google sign-in failed.") });
+      setBusy(null);
+    }
+  };
 
-    const resetPassword = async () => {
-        if (!email) {
-            Alert.alert('Error', 'Please enter your email address to reset your password.');
-            return;
-        }
-        try {
-            await sendPasswordResetEmail(auth, email);
-            Alert.alert('Success', 'Password reset email sent! Check your inbox.');
-        } catch (error: any) {
-            console.log(error);
-            Alert.alert('Error', 'Failed to send password reset email: ' + error.message);
-        }
-    };
-
-    return (
-        <SafeAreaView style={styles.container}>
-            <Text style={styles.title}>Login</Text>
-            <TextInput style={styles.textInput} placeholder="email" value={email} onChangeText={setEmail} />
-            <TextInput style={styles.textInput} placeholder="password" value={password} onChangeText={setPassword} secureTextEntry />
-            <TouchableOpacity style={styles.button} onPress={signIn}>
-                <Text style={styles.text}>Login</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={signUp}>
-                <Text style={styles.text}>Make Account</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.googleButton} onPress={signInWithGoogle}>
-                <Text style={styles.text}>Sign in with Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={resetPassword}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-        </SafeAreaView>
-    );
-};
-
-export default index;
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#FAFAFA',
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        marginBottom: 40,
-        color: '#1A237E',
-    },
-    textInput: {
-        height: 50,
-        width: '90%',
-        backgroundColor: '#FFFFFF',
-        borderColor: '#E8EAF6',
-        borderWidth: 2,
-        borderRadius: 15,
-        marginVertical: 15,
-        paddingHorizontal: 25,
-        fontSize: 16,
-        color: '#3C4858',
-        shadowColor: '#9E9E9E',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    button: {
-        width: '90%',
-        marginVertical: 15,
-        backgroundColor: '#5C6BC0',
-        padding: 20,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#5C6BC0',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 5,
-        elevation: 5,
-    },
-    googleButton: {
-        width: '90%',
-        marginVertical: 15,
-        backgroundColor: '#DB4437', // Google red color
-        padding: 20,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#DB4437',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 5,
-        elevation: 5,
-    },
-    text: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    forgotPasswordText: {
-        color: '#1A237E',
-        fontSize: 16,
-        fontWeight: '600',
-        marginTop: 10,
-    },
-});
+  return (
+    <AuthLayout title="Welcome back" subtitle="Sign in to see your watchlists and friends.">
+      {!configured ? <Notice tone="danger">Sign-in isn't available: this deployment is missing its Firebase configuration.</Notice> : null}
+      <TextField
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        inputMode="email"
+        error={errors.email}
+        testID="login-email"
+        onSubmitEditing={submit}
+      />
+      <TextField
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        password
+        autoComplete="current-password"
+        error={errors.password}
+        testID="login-password"
+        onSubmitEditing={submit}
+      />
+      <View style={{ alignItems: "flex-end" }}>
+        <Link href={{ pathname: "/forgot-password", params: email ? { email } : {} }} style={{ color: colors.primary, fontWeight: "600" }} testID="forgot-password-link">
+          Forgot password?
+        </Link>
+      </View>
+      {errors.form ? <Notice tone="danger">{errors.form}</Notice> : null}
+      <Button title="Sign in" onPress={submit} loading={busy === "password"} disabled={!configured || busy !== null} fullWidth size="lg" testID="login-submit" />
+      {googleSignInEnabled && Platform.OS === "web" ? (
+        <Button title="Continue with Google" icon="login" variant="outline" onPress={google} loading={busy === "google"} disabled={!configured || busy !== null} fullWidth />
+      ) : null}
+      <AppText center variant="muted">
+        New to eyelevel?{" "}
+        <Link href={{ pathname: "/register", params: redirect !== "/" ? { redirect } : {} }} style={{ color: colors.primary, fontWeight: "700" }} testID="register-link">
+          Create an account
+        </Link>
+      </AppText>
+    </AuthLayout>
+  );
+}

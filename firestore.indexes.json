@@ -1,0 +1,37 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "discoverable", "order": "ASCENDING" },
+        { "fieldPath": "usernameLower", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "discoverable", "order": "ASCENDING" },
+        { "fieldPath": "displayNameLower", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "shared",
+      "fieldPath": "movies",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "shared",
+      "fieldPath": "lists",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "users",
+      "fieldPath": "watchlist",
+      "indexes": []
+    }
+  ]
+}

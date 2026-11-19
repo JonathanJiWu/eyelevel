@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-*
+android
+ios
+.expo
+.git
+.github
+test-results
+playwright-report
+e2e
+tests
+*.log
+.env
+.env.*
+!.env.example

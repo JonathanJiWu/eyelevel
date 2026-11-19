@@ -1,0 +1,278 @@
+rules_version = '2';
+
+// eyelevel Firestore security rules (schema v2).
+//
+// Principles:
+//  * Everything is denied unless a rule below allows it.
+//  * Private data (users/{uid} and its subcollections) is owner-only.
+//  * Friends can read exactly one document of another user: the shared index
+//    (users/{uid}/shared/index), which only contains what the owner chose to
+//    share. Non-friends cannot read it.
+//  * Profiles hold public info only (no email). Only discoverable profiles can
+//    be listed/searched.
+//  * Friend requests / friendships have strict invariants (no self requests,
+//    no duplicates, no unsolicited friendships).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------ helpers
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && uid() == userId;
+    }
+
+    function pairKey(a, b) {
+      return a < b ? a + '_' + b : b + '_' + a;
+    }
+
+    function isFriend(other) {
+      return signedIn() && other != uid()
+        && exists(/databases/$(database)/documents/friendships/$(pairKey(uid(), other)));
+    }
+
+    function str(v, min, max) {
+      return v is string && v.size() >= min && v.size() <= max;
+    }
+
+    function optStr(v, max) {
+      return v == null || (v is string && v.size() <= max);
+    }
+
+    function optInt(v) {
+      return v == null || v is int;
+    }
+
+    function optTimestamp(v) {
+      return v == null || v is timestamp;
+    }
+
+    // ----------------------------------------------------------------- profiles
+    function validProfile(d, userId) {
+      return d.keys().hasOnly(['uid', 'displayName', 'displayNameLower', 'username', 'usernameLower',
+                                'bio', 'avatarColor', 'discoverable', 'allowFriendRequests',
+                                'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['uid', 'displayName', 'displayNameLower', 'username', 'usernameLower',
+                             'bio', 'avatarColor', 'discoverable', 'allowFriendRequests',
+                             'createdAt', 'updatedAt'])
+        && d.uid == userId
+        && str(d.displayName, 1, 40)
+        && str(d.displayNameLower, 1, 80)
+        && d.username is string && d.username.matches('^[A-Za-z0-9_]{3,20}$')
+        && d.usernameLower == d.username.lower()
+        && str(d.bio, 0, 160)
+        && d.avatarColor is string && d.avatarColor.matches('^#[0-9A-Fa-f]{6}$')
+        && d.discoverable is bool
+        && d.allowFriendRequests is bool
+        && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    match /profiles/{userId} {
+      allow get: if signedIn();
+      // Search only ever returns people who opted in to being discoverable.
+      allow list: if signedIn() && resource.data.discoverable == true;
+      allow create: if isOwner(userId)
+        && validProfile(request.resource.data, userId)
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.usernameLower)).data.uid == userId;
+      // Changing username must claim the new name AND release the old one in
+      // the same batch (prevents hoarding usernames).
+      allow update: if isOwner(userId)
+        && validProfile(request.resource.data, userId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.usernameLower == resource.data.usernameLower
+            || (getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.usernameLower)).data.uid == userId
+                && !existsAfter(/databases/$(database)/documents/usernames/$(resource.data.usernameLower))));
+      allow delete: if isOwner(userId);
+    }
+
+    // ---------------------------------------------------------------- usernames
+    // One document per lowercase username guarantees uniqueness.
+    match /usernames/{name} {
+      // Availability can be checked before signing up.
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && name.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+        && request.resource.data.uid == uid()
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/profiles/$(uid())).data.usernameLower == name;
+      allow update: if false;
+      // A claim can be released once the owner's profile no longer uses it.
+      allow delete: if signedIn()
+        && resource.data.uid == uid()
+        && (!existsAfter(/databases/$(database)/documents/profiles/$(uid()))
+            || getAfter(/databases/$(database)/documents/profiles/$(uid())).data.usernameLower != name);
+    }
+
+    // ------------------------------------------------------- private user data
+    function validUserFields(d) {
+      return (!('email' in d) || optStr(d.email, 254))
+        && (!('privacy' in d) || (d.privacy is map
+              && d.privacy.keys().hasOnly(['shareWatched', 'shareRatings'])
+              && d.privacy.shareWatched is bool
+              && d.privacy.shareRatings is bool))
+        && (!('preferences' in d) || (d.preferences is map
+              && d.preferences.keys().hasOnly(['favoriteGenres', 'preferredLanguage'])
+              && d.preferences.favoriteGenres is list
+              && d.preferences.favoriteGenres.size() <= 10
+              && (d.preferences.preferredLanguage == null
+                  || (d.preferences.preferredLanguage is string
+                      && d.preferences.preferredLanguage.matches('^[a-z]{2}$')))))
+        && (!('schemaVersion' in d) || d.schemaVersion is int)
+        && (!('migratedAt' in d) || optTimestamp(d.migratedAt))
+        && (!('createdAt' in d) || optTimestamp(d.createdAt))
+        && (!('updatedAt' in d) || optTimestamp(d.updatedAt));
+    }
+
+    function validList(d) {
+      return d.keys().hasOnly(['name', 'description', 'visibility', 'createdAt', 'updatedAt'])
+        && str(d.name, 1, 60)
+        && str(d.description, 0, 280)
+        && d.visibility in ['private', 'friends']
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    function validEntry(d, movieId) {
+      return d.keys().hasOnly(['movieId', 'title', 'posterPath', 'releaseDate', 'year', 'genreIds',
+                                'voteAverage', 'originalLanguage', 'listIds', 'watched', 'watchedAt',
+                                'rating', 'ratedAt', 'addedAt', 'updatedAt'])
+        && d.movieId is int && d.movieId > 0 && string(d.movieId) == movieId
+        && str(d.title, 1, 300)
+        && optStr(d.posterPath, 200)
+        && optStr(d.releaseDate, 10)
+        && optInt(d.year)
+        && d.genreIds is list && d.genreIds.size() <= 20
+        && d.voteAverage is number
+        && optStr(d.originalLanguage, 10)
+        && d.listIds is list && d.listIds.size() <= 50
+        && d.watched is bool
+        && optTimestamp(d.watchedAt)
+        && (d.rating == null || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && optTimestamp(d.ratedAt)
+        && d.addedAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    function validActivity(d) {
+      return d.keys().hasOnly(['type', 'movieId', 'title', 'listId', 'listName', 'rating', 'createdAt'])
+        && d.type in ['added', 'removed', 'rated', 'unrated', 'watched', 'unwatched',
+                      'list_created', 'list_updated', 'list_deleted', 'friend_added']
+        && optInt(d.movieId)
+        && optStr(d.title, 300)
+        && optStr(d.listId, 64)
+        && optStr(d.listName, 60)
+        && (d.rating == null || (d.rating is int && d.rating >= 1 && d.rating <= 5))
+        && d.createdAt == request.time;
+    }
+
+    function validSharedIndex(d) {
+      return d.keys().hasOnly(['version', 'movies', 'lists', 'updatedAt'])
+        && d.version == 1
+        && d.movies is map && d.movies.size() <= 4000
+        && d.lists is map && d.lists.size() <= 50
+        && d.updatedAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['email', 'privacy', 'preferences', 'schemaVersion',
+                                                  'migratedAt', 'createdAt', 'updatedAt'])
+        && validUserFields(request.resource.data);
+      // Legacy (v1) fields such as `watchlist`, `name` and `friends` may exist;
+      // they can stay but cannot be modified through the app.
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['email', 'privacy', 'preferences', 'schemaVersion', 'migratedAt', 'createdAt', 'updatedAt'])
+        && validUserFields(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      match /watchlists/{listId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && validList(request.resource.data);
+        allow update: if isOwner(userId)
+          && validList(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /library/{movieId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && validEntry(request.resource.data, movieId);
+      }
+
+      match /activity/{activityId} {
+        allow read, delete: if isOwner(userId);
+        allow create: if isOwner(userId) && validActivity(request.resource.data);
+        allow update: if false;
+      }
+
+      // The only per-user document friends may read.
+      match /shared/{docId} {
+        allow read: if docId == 'index' && (isOwner(userId) || isFriend(userId));
+        allow create, update: if isOwner(userId) && docId == 'index' && validSharedIndex(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // ---------------------------------------------------------- friend requests
+    // Document id: `${from}_${to}`.
+    match /friendRequests/{requestId} {
+      allow get: if signedIn() && uid() in requestId.split('_');
+      allow list: if signedIn() && (resource.data.from == uid() || resource.data.to == uid());
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from', 'to', 'createdAt'])
+        && request.resource.data.from == uid()
+        && request.resource.data.to is string
+        && request.resource.data.to != uid()
+        && requestId == uid() + '_' + request.resource.data.to
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/profiles/$(uid()))
+        && exists(/databases/$(database)/documents/profiles/$(request.resource.data.to))
+        && get(/databases/$(database)/documents/profiles/$(request.resource.data.to)).data.allowFriendRequests == true
+        && !exists(/databases/$(database)/documents/friendships/$(pairKey(uid(), request.resource.data.to)))
+        && !exists(/databases/$(database)/documents/friendRequests/$(request.resource.data.to + '_' + uid()));
+      allow update: if false;
+      // Sender cancels, recipient declines. Deleting an already-removed
+      // request of your own is a harmless no-op (e.g. it was just accepted).
+      allow delete: if signedIn()
+        && (resource == null
+              ? uid() in requestId.split('_')
+              : (resource.data.from == uid() || resource.data.to == uid()));
+    }
+
+    // -------------------------------------------------------------- friendships
+    // Document id: `${a}_${b}` with a < b.
+    match /friendships/{friendshipId} {
+      allow get: if signedIn() && uid() in friendshipId.split('_');
+      allow list: if signedIn() && uid() in resource.data.members;
+      // Only the recipient of a pending request can accept it, and the request
+      // must be deleted in the same batch.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['members', 'requestedBy', 'createdAt'])
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 2
+        && uid() in request.resource.data.members
+        && request.resource.data.members[0] < request.resource.data.members[1]
+        && friendshipId == request.resource.data.members[0] + '_' + request.resource.data.members[1]
+        && request.resource.data.requestedBy is string
+        && request.resource.data.requestedBy in request.resource.data.members
+        && request.resource.data.requestedBy != uid()
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/friendRequests/$(request.resource.data.requestedBy + '_' + uid()))
+        && !existsAfter(/databases/$(database)/documents/friendRequests/$(request.resource.data.requestedBy + '_' + uid()));
+      allow update: if false;
+      allow delete: if signedIn()
+        && (resource == null ? uid() in friendshipId.split('_') : uid() in resource.data.members);
+    }
+  }
+}

@@ -6,6 +6,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-*/
 web-build/
 expo-env.d.ts
 
@@ -29,14 +30,37 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# env files (secrets) — keep .env.example committed
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
 
 app-example
 
-# credentials
+# legacy credential files (config now comes from environment variables)
 tmdbConfig.js
+tmdbConfig.ts
 firebaseConfigs.ts
+firebaseConfigs.js
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+
+# Tests
+test-results/
+playwright-report/
+coverage/
+
+# Vercel
+.vercel

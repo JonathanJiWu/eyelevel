@@ -1,381 +1,301 @@
-import { Text, View, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, Platform, Animated, Switch } from "react-native";
-import { useState, useEffect } from "react";
-import { User } from "firebase/auth"; // Add this import at the top of the file
-import axios from "axios";
-import { TMDB_API_KEY } from "../../tmdbConfig";
-import { auth, db } from "../../firebaseConfigs";
-import { useRouter } from "expo-router";
-import { doc, setDoc, updateDoc, arrayUnion } from "firebase/firestore";
-import { signOut } from "firebase/auth";
-import { useTheme } from "../_layout"; // Import useTheme
-import { MaterialIcons } from "@expo/vector-icons"; // Add this import
+import { MaterialIcons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View, type TextInput } from "react-native";
+import { ActiveFilters } from "@/src/components/movies/ActiveFilters";
+import { FilterSheet } from "@/src/components/movies/FilterSheet";
+import { MovieCard } from "@/src/components/movies/MovieCard";
+import { AppText } from "@/src/components/ui/AppText";
+import { Button } from "@/src/components/ui/Button";
+import { Container } from "@/src/components/ui/Layout";
+import { EmptyState, ErrorState, Notice, Skeleton } from "@/src/components/ui/States";
+import { TextField } from "@/src/components/ui/TextField";
+import { snapshotFromMovie } from "@/src/data/library";
+import { useAuth } from "@/src/context/AuthContext";
+import { useLibrary } from "@/src/context/LibraryContext";
+import { useSaveMovie } from "@/src/context/SaveMovieContext";
+import { useSocial } from "@/src/context/SocialContext";
+import { useTheme } from "@/src/context/ThemeContext";
+import { useDebouncedValue } from "@/src/hooks/useDebouncedValue";
+import { useMovieFeed } from "@/src/hooks/useMovieFeed";
+import { useResponsive } from "@/src/hooks/useResponsive";
+import { participantFromSharedIndex, popularAmongFriends } from "@/src/lib/compare";
+import { countActiveFilters, filtersToParams, hasActiveCriteria, parseFilters, sameFilters, type MovieFilters } from "@/src/lib/filters";
+import { cleanSearchParams } from "@/src/lib/params";
+import { MIN_QUERY_LENGTH } from "@/src/lib/search";
+import { radius, spacing } from "@/src/theme/colors";
+import { shadow } from "@/src/theme/shadow";
+import type { MovieSummary } from "@/src/types/movies";
 
-export default function Index() {
-  const [query, setQuery] = useState("");
-  const [movies, setMovies] = useState([]);
-  const [popularMovies, setPopularMovies] = useState<Array<{ id: number; title: string; release_date: string; adult: boolean; poster_path: string }>>([]); // Add popular movies state
-  const [autocompleteResults, setAutocompleteResults] = useState<Array<{ id: number; title: string }>>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [numColumns, setNumColumns] = useState(2);
-  const [addedMovie, setAddedMovie] = useState<string | null>(null);
-  const [page, setPage] = useState(1); // Add page state
+const GAP = 12;
+const FILTER_KEYS = ["genres", "genreMode", "yearFrom", "yearTo", "ratingMin", "votesMin", "language", "runtime", "certification", "sort"];
+
+export default function DiscoverScreen() {
+  const rawParams = useLocalSearchParams<Record<string, string>>();
+  const params = useMemo(() => cleanSearchParams(rawParams), [rawParams]);
   const router = useRouter();
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { colors } = useTheme();
+  const { columns, contentWidth } = useResponsive();
+  const library = useLibrary();
+  const { quickSave, savingId } = useSaveMovie();
+
+  const [input, setInput] = useState(() => (typeof params.q === "string" ? params.q : ""));
+  const [filters, setFilters] = useState<MovieFilters>(() => parseFilters(params));
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const query = useDebouncedValue(input, 350);
+  const searching = query.trim().length >= MIN_QUERY_LENGTH;
+  const feed = useMovieFeed(query, filters);
+
+  // Keep state in sync with the URL (shareable searches, back/forward, refresh).
+  useEffect(() => {
+    const fromUrl = parseFilters(params);
+    setFilters((current) => (sameFilters(current, fromUrl) ? current : fromUrl));
+    const q = typeof params.q === "string" ? params.q : "";
+    setInput((current) => (current.trim() === q.trim() ? current : q));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    fetchPopularMovies(1, 5); // Fetch 100 movies (20 movies per page * 5 pages)
-  }, []);
-
-  useEffect(() => {
-    const updateColumns = () => {
-      const width = Platform.OS === "web" ? window.innerWidth : 360;
-      setNumColumns(Math.floor(width / 150));
-    };
-    updateColumns();
-    if (Platform.OS === "web") {
-      window.addEventListener("resize", updateColumns);
-      return () => window.removeEventListener("resize", updateColumns);
+    const next: Record<string, string | undefined> = { q: query.trim() || undefined };
+    for (const key of FILTER_KEYS) next[key] = undefined;
+    Object.assign(next, filtersToParams(filters));
+    const current = params;
+    const wanted = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
+    if (JSON.stringify(current, Object.keys(current).sort()) !== JSON.stringify(wanted, Object.keys(wanted).sort())) {
+      router.setParams(next);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, filters]);
 
-  const fetchMovies = async (text: string, pageNum = 1) => {
-    try {
-      const response = await axios.get(
-        `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${text}&page=${pageNum}`
-      );
-      return response.data.results;
-    } catch (error) {
-      console.error("Error fetching movies:", error);
-      return [];
-    }
-  };
+  const numColumns = columns(150, 7);
+  const tileWidth = Math.floor((contentWidth - GAP * (numColumns - 1)) / numColumns);
+  const activeCount = countActiveFilters(filters);
 
-  const fetchPopularMovies = async (startPage = 1, totalPages = 1) => {
-    try {
-      let allMovies: Array<{ id: number; title: string; release_date: string; adult: boolean; poster_path: string }> = [];
-      for (let page = startPage; page < startPage + totalPages; page++) {
-        const response = await axios.get(
-          `https://api.themoviedb.org/3/movie/popular?api_key=${TMDB_API_KEY}&page=${page}`
-        );
-        const weightedMovies = response.data.results
-          .filter((movie: { adult: boolean }) => !movie.adult)
-          .sort(
-            (a: { release_date: string }, b: { release_date: string }) =>
-              new Date(b.release_date).getTime() -
-              new Date(a.release_date).getTime()
-          );
-        allMovies = [...allMovies, ...weightedMovies];
-      }
-      setPopularMovies((prev) => [...prev, ...allMovies]);
-    } catch (error) {
-      console.error("Error fetching popular movies:", error);
-    }
-  };
+  const suggestions = focused && input.trim().length >= MIN_QUERY_LENGTH && input === query && feed.status === "ready" ? feed.movies.slice(0, 6) : [];
 
-  const searchMovies = async (text: string) => {
-    setQuery(text);
-    setAutocompleteResults([]); // Clear autocomplete dropdown when a search action occurs
-    if (text.length > 2) {
-      setMovies([]); // Clear current movies to show a blank page
-      setPopularMovies([]); // Forcefully clear popular movies
-      const results = await fetchMovies(text);
-      setMovies(results); // Replace with search results
-    } else {
-      setMovies([]);
-      setPopularMovies([]); // Ensure popular movies are cleared if search is invalid
-      fetchPopularMovies(); // Refresh popular movie feeds
-    }
-  };
+  const openMovie = useCallback((id: number) => router.push({ pathname: "/movie/[id]", params: { id: String(id) } }), [router]);
 
-  const handleAutocomplete = async (text: string) => {
-    setQuery(text);
-    if (text.length > 2) {
-      const results = await fetchMovies(text);
-      setAutocompleteResults(results.slice(0, 5));
-    } else {
-      setAutocompleteResults([]);
-      fetchPopularMovies(); // Reload popular movies if autocomplete is cleared
-    }
-  };
-
-  const loadMoreMovies = async () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-  };
-
-  const addToWatchlist = async (movie: any) => {
-    if (!user) {
-      alert("Please sign in to add movies to your watchlist.");
-      return;
-    }
-    const userDoc = doc(db, "users", user.uid);
-    try {
-      await setDoc(userDoc, { watchlist: arrayUnion(movie) }, { merge: true });
-      setAddedMovie(movie.title);
-      setTimeout(() => setAddedMovie(null), 3000);
-    } catch (error) {
-      console.error("Error adding to watchlist:", error);
-    }
-  };
-
-  const renderMovieTile = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={[styles.movieTile, { flex: 1 / numColumns }]}
-      onPress={() => router.push(`/movie/${item.id}`)}
-    >
-      <Image
-        source={{ uri: `https://image.tmdb.org/t/p/w500${item.poster_path}` }}
-        style={styles.moviePoster}
+  const renderItem = useCallback(
+    ({ item }: { item: MovieSummary }) => (
+      <MovieCard
+        movie={item}
+        width={tileWidth}
+        onPress={() => openMovie(item.id)}
+        saved={library.isSaved(item.id)}
+        busy={savingId === item.id}
+        onQuickAdd={() => quickSave(snapshotFromMovie(item))}
       />
-      <TouchableOpacity
-        style={styles.watchlistButton}
-        onPress={() => addToWatchlist(item)}
-      >
-        <Text style={styles.watchlistText}>+</Text>
-      </TouchableOpacity>
-      <Text style={styles.movieTitle}>{item.title}</Text>
-      <Text style={styles.movieYear}>{item.release_date?.split("-")[0]}</Text>
-    </TouchableOpacity>
+    ),
+    [tileWidth, openMovie, library, savingId, quickSave],
   );
 
-  return (
-    <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-      <View style={styles.header}>
-        <Text
-          style={[styles.title, isDarkMode && styles.darkText]}
-          onPress={() => {
-            setMovies([]); // Clear search results
-            setPopularMovies([]); // Reset popular movies
-            fetchPopularMovies(); // Reload popular movies
-            router.push("/"); // Navigate to home page
-          }}
-        >
-          eyelevel
-        </Text>
-        <View style={styles.headerRight}>
-          <MaterialIcons
-            name={isDarkMode ? "nights-stay" : "wb-sunny"}
-            size={24}
-            color={isDarkMode ? "#fff" : "#000"}
-          />
-          <Switch value={isDarkMode} onValueChange={toggleDarkMode} style={styles.toggle} />
-          {user ? (
-            <TouchableOpacity onPress={() => router.push("/(tabs)/user")}> {/* Navigate to MyMovies tab */}
-              <Text style={[styles.signInText, isDarkMode && styles.darkText]}>
-                Hello, {user?.displayName || user?.email || "User"}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={() => router.push("/login")}>
-              <Text style={[styles.signInText, isDarkMode && styles.darkText]}>Sign In</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => router.push("/screens/addFriend")}> {/* Navigate to addFriend page */}
-            <Text style={[styles.addFriendButton, isDarkMode && styles.darkText]}>Add Friend</Text>
-          </TouchableOpacity>
-        </View>
+  const title = searching ? `Results for “${query.trim()}”` : hasActiveCriteria(filters) ? "Filtered movies" : "Popular right now";
+
+  const header = (
+    <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
+      {!searching && !hasActiveCriteria(filters) ? <FriendsAreSaving width={tileWidth} onOpen={openMovie} /> : null}
+      <View style={styles.titleRow}>
+        <AppText variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={2}>
+          {title}
+        </AppText>
+        {feed.status === "ready" && feed.totalResults > 0 ? (
+          <AppText variant="muted" testID="result-count">
+            {feed.totalResults.toLocaleString()} {feed.totalResults === 1 ? "movie" : "movies"}
+          </AppText>
+        ) : null}
       </View>
-      <View
-        style={{
-          ...styles.searchContainer,
-          zIndex: 200, // Ensure parent container has a high zIndex
-        }}
-      >
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Search for movies..."
-          value={query}
-          onChangeText={handleAutocomplete}
-          onSubmitEditing={() => searchMovies(query)}
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={() => searchMovies(query)}>
-          <Text style={[styles.searchButtonText, { color: isDarkMode ? "#fff" : "#000" }]}>🔍</Text>
-        </TouchableOpacity>
-        {autocompleteResults.length > 0 && (
-          <View
-            style={{
-              ...styles.autocompleteDropdown,
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              zIndex: 300, // Ensure dropdown has the highest zIndex
-              elevation: 20, // Add sufficient elevation for Android
-              overflow: "visible", // Ensure dropdown is not clipped
-            }}
-          >
-            {autocompleteResults.map((result) => (
-              <TouchableOpacity
-                key={result.id}
-                onPress={() => {
-                  setQuery(result.title);
-                  setAutocompleteResults([]);
-                  searchMovies(result.title);
-                }}
-              >
-                <Text style={styles.autocompleteItem}>{result.title}</Text>
-              </TouchableOpacity>
-            ))}
+      {feed.meta?.fuzzy ? <Notice>Few exact matches for “{query.trim()}”, so we included close spellings.</Notice> : null}
+      {searching && feed.meta?.ignoredFilters.length ? (
+        <Notice tone="warning">Runtime and age rating filters don't apply to text search. Clear the search box to use them.</Notice>
+      ) : null}
+      {feed.meta?.truncated && feed.meta.mode === "search" ? (
+        <AppText variant="caption">Filtering the 100 best matches for this search. Try a more specific title for more.</AppText>
+      ) : null}
+    </View>
+  );
+
+  const empty =
+    feed.status === "loading" ? (
+      <View style={styles.skeletonGrid}>
+        {Array.from({ length: numColumns * 2 }, (_, i) => (
+          <View key={i} style={{ width: tileWidth, gap: 6 }}>
+            <Skeleton height={(tileWidth * 3) / 2} />
+            <Skeleton height={12} width="80%" />
           </View>
-        )}
+        ))}
+      </View>
+    ) : feed.status === "error" ? (
+      <ErrorState message={feed.error ?? undefined} onRetry={feed.retry} />
+    ) : (
+      <EmptyState
+        icon="search-off"
+        title={searching ? "No movies match your search" : "No movies match these filters"}
+        message={activeCount ? "Try removing a filter or widening the year range." : "Check the spelling or try a different title."}
+        actionLabel={activeCount ? "Clear filters" : undefined}
+        onAction={activeCount ? () => setFilters({ ...filters, ...parseFilters({}), sort: filters.sort }) : undefined}
+        testID="discover-empty"
+      />
+    );
+
+  const footer =
+    feed.movies.length === 0 ? null : feed.loadingMore ? (
+      <View style={styles.footer}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    ) : feed.loadMoreError ? (
+      <View style={styles.footer}>
+        <AppText variant="muted">{feed.loadMoreError}</AppText>
+        <Button title="Retry" size="sm" variant="secondary" onPress={feed.retry} />
+      </View>
+    ) : !feed.hasMore ? (
+      <View style={styles.footer}>
+        <AppText variant="caption" testID="end-of-results">
+          You've reached the end.
+        </AppText>
+      </View>
+    ) : (
+      <View style={styles.footer} />
+    );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={[styles.searchArea, { borderBottomColor: colors.border }]}>
+        <Container>
+          <View style={styles.searchRow}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                ref={inputRef}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Search movies by title…"
+                icon="search"
+                onClear={() => setInput("")}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel="Search movies"
+                onFocus={() => setFocused(true)}
+                onBlur={() => setTimeout(() => setFocused(false), 150)}
+                onSubmitEditing={() => {
+                  setFocused(false);
+                  inputRef.current?.blur();
+                }}
+                testID="search-input"
+              />
+            </View>
+            <Button
+              title={activeCount ? `Filters (${activeCount})` : "Filters"}
+              icon="tune"
+              variant={activeCount ? "primary" : "secondary"}
+              onPress={() => setFiltersOpen(true)}
+              testID="open-filters"
+            />
+          </View>
+          <ActiveFilters filters={filters} onChange={setFilters} />
+          {suggestions.length ? (
+            <View style={[styles.suggestions, { backgroundColor: colors.surface, borderColor: colors.border }]} testID="search-suggestions">
+              {suggestions.map((m) => (
+                <Pressable
+                  key={m.id}
+                  accessibilityRole="link"
+                  onPress={() => {
+                    setFocused(false);
+                    openMovie(m.id);
+                  }}
+                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.suggestion, (hovered || pressed) && { backgroundColor: colors.primarySoft }]}
+                >
+                  <MaterialIcons name="movie" size={18} color={colors.textMuted} />
+                  <AppText numberOfLines={1} style={{ flex: 1 }}>
+                    {m.title}
+                  </AppText>
+                  <AppText variant="caption">{m.year ?? ""}</AppText>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </Container>
       </View>
       <FlatList
-        data={movies.length > 0 ? movies : popularMovies} // Show search results or popular movies
-        key={numColumns}
-        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-        renderItem={renderMovieTile}
+        key={`grid-${numColumns}`}
+        testID="movie-grid"
+        data={feed.movies}
+        keyExtractor={(m) => String(m.id)}
+        renderItem={renderItem}
         numColumns={numColumns}
-        onEndReached={loadMoreMovies}
-        onEndReachedThreshold={0.5}
-        columnWrapperStyle={{ justifyContent: "space-evenly" }}
-        extraData={movies} // Ensure FlatList updates when movies change
+        columnWrapperStyle={numColumns > 1 ? { gap: GAP } : undefined}
+        contentContainerStyle={[styles.listContent, { width: contentWidth }]}
+        style={{ flex: 1 }}
+        ItemSeparatorComponent={() => <View style={{ height: spacing.lg }} />}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        ListFooterComponent={footer}
+        onEndReached={feed.loadMore}
+        onEndReachedThreshold={0.6}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={numColumns * 4}
+        windowSize={7}
+        removeClippedSubviews={false}
       />
-      {addedMovie && (
-        <Animated.View style={styles.addedMovieOverlay}>
-          <Text style={styles.addedMovieText}>Added "{addedMovie}" to your watchlist</Text>
-        </Animated.View>
-      )}
+      <FilterSheet visible={filtersOpen} filters={filters} searching={searching} onApply={setFilters} onClose={() => setFiltersOpen(false)} />
+    </View>
+  );
+}
+
+/** Horizontal row of movies saved by friends (most-saved first). */
+function FriendsAreSaving({ width, onOpen }: { width: number; onOpen: (id: number) => void }) {
+  const { user } = useAuth();
+  const { friends } = useSocial();
+  const library = useLibrary();
+  const { quickSave } = useSaveMovie();
+  const movies = useMemo(() => {
+    const participants = friends.filter((f) => f.index).map((f) => participantFromSharedIndex(f.uid, f.profile?.displayName ?? "Friend", f.index));
+    return popularAmongFriends(participants, 1).slice(0, 15);
+  }, [friends]);
+  if (!user || movies.length === 0) return null;
+  const tile = Math.min(width, 150);
+  return (
+    <View style={{ gap: spacing.sm }} testID="friends-saving">
+      <AppText variant="title" accessibilityRole="header">
+        Your friends want to watch
+      </AppText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: GAP }}>
+        {movies.map((m) => (
+          <MovieCard
+            key={m.movieId}
+            width={tile}
+            movie={{ id: m.movieId, title: m.title, posterPath: m.posterPath, year: m.year }}
+            onPress={() => onOpen(m.movieId)}
+            saved={library.isSaved(m.movieId)}
+            onQuickAdd={() =>
+              quickSave({ movieId: m.movieId, title: m.title, posterPath: m.posterPath, releaseDate: null, year: m.year, genreIds: [], voteAverage: 0, originalLanguage: null })
+            }
+            footnote={`${m.savedBy.length} friend${m.savedBy.length === 1 ? "" : "s"}`}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  darkContainer: {
-    backgroundColor: "#121212", // Dark mode background
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 15,
-    marginTop: 15,
-    paddingHorizontal: 25,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  username: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  darkText: {
-    color: "#e0e0e0", // Light gray text for dark mode
-  },
-  signInText: {
-    fontSize: 16,
-    color: "#000",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-    backgroundColor: "#fff", // Default background color
-    borderRadius: 8, // Match searchBar borderRadius
-    borderWidth: 1,
-    borderColor: "#ccc", // Default border color
-    marginHorizontal: 25, // Match container padding
-  },
-  searchBar: {
-    flex: 1,
-    padding: 10,
-    fontSize: 16,
-    // paddingVertical: 5,
-    // marginHorizontal: 10,
-    backgroundColor: "#f0f0f0", // Light grey color for light mode
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-  },
-  searchButton: {
-    padding: 5,
-  },
-  searchButtonText: {
-    fontSize: 16,
-    // Removed dynamic logic from styles
-    color: "#000",
-  },
-  autocompleteDropdown: {
+  searchArea: { paddingTop: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, zIndex: 10 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 4 },
+  suggestions: {
     position: "absolute",
-    top: 50,
-    left: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    borderRadius: 5,
-    zIndex: 1,
+    top: 52,
+    left: spacing.lg,
+    right: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 4,
+    zIndex: 20,
+    ...shadow("lg"),
   },
-  autocompleteItem: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-  },
-  movieTile: {
-    flex: 1,
-    margin: 5,
-    backgroundColor: "#333",
-    borderRadius: 5,
-    overflow: "hidden",
-    alignItems: "center",
-    position: "relative",
-  },
-  moviePoster: {
-    width: "100%",
-    aspectRatio: 27 / 40,
-  },
-  watchlistButton: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    borderRadius: 15,
-    padding: 5,
-  },
-  watchlistText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  movieTitle: {
-    color: "#fff",
-    fontSize: 14,
-    marginTop: 5,
-  },
-  movieYear: {
-    color: "#aaa",
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  addedMovieOverlay: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: [{ translateX: -100 }, { translateY: -20 }],
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    padding: 10,
-    borderRadius: 5,
-  },
-  addedMovieText: {
-    color: "#fff",
-    fontSize: 16,
-    textAlign: "center",
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  toggle: {
-    marginHorizontal: 10,
-  },
-  addFriendButton: {
-    fontSize: 16,
-    color: "#000",
-    marginLeft: 10,
-  },
+  suggestion: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  titleRow: { flexDirection: "row", alignItems: "baseline", gap: 12, marginTop: spacing.md },
+  listContent: { alignSelf: "center", paddingBottom: 48 },
+  skeletonGrid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
+  footer: { paddingVertical: 24, alignItems: "center", gap: 10 },
 });
