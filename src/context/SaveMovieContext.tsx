@@ -22,7 +22,7 @@ import { useLibrary } from "./LibraryContext";
 import { useTheme } from "./ThemeContext";
 
 interface SaveMovieValue {
-  openPicker: (movie: MovieSnapshot) => void;
+  openPicker: (movie: MovieSnapshot) => Promise<void>;
   quickSave: (movie: MovieSnapshot) => Promise<void>;
   savingId: number | null;
 }
@@ -30,7 +30,7 @@ interface SaveMovieValue {
 const SaveMovieContext = createContext<SaveMovieValue | null>(null);
 
 export function SaveMovieProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { waitForAuth } = useAuth();
   const library = useLibrary();
   const { toast } = useFeedback();
   const router = useRouter();
@@ -43,17 +43,19 @@ export function SaveMovieProvider({ children }: { children: React.ReactNode }) {
     router.push({ pathname: "/login", params: { redirect: pathname } });
   }, [router, pathname, toast]);
 
+  // Wait for the session to be restored before deciding the user is signed
+  // out (a click right after page load must not bounce through /login).
   const openPicker = useCallback(
-    (next: MovieSnapshot) => {
-      if (!user) return goToLogin();
+    async (next: MovieSnapshot) => {
+      if (!(await waitForAuth())) return goToLogin();
       setMovie(next);
     },
-    [user, goToLogin],
+    [waitForAuth, goToLogin],
   );
 
   const quickSave = useCallback(
     async (next: MovieSnapshot) => {
-      if (!user) return goToLogin();
+      if (!(await waitForAuth())) return goToLogin();
       if (library.isSaved(next.movieId)) {
         setMovie(next);
         return;
@@ -68,7 +70,7 @@ export function SaveMovieProvider({ children }: { children: React.ReactNode }) {
         setSavingId(null);
       }
     },
-    [user, goToLogin, library, toast],
+    [waitForAuth, goToLogin, library, toast],
   );
 
   const value = useMemo(() => ({ openPicker, quickSave, savingId }), [openPicker, quickSave, savingId]);

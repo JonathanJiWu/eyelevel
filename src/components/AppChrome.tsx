@@ -1,6 +1,7 @@
 import { usePathname, useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "@/src/components/ui/AppText";
 import { Avatar } from "@/src/components/ui/Avatar";
 import { Button, IconButton, type IconName } from "@/src/components/ui/Button";
@@ -13,11 +14,31 @@ export function Wordmark() {
   const router = useRouter();
   const { colors } = useTheme();
   return (
-    <Pressable accessibilityRole="link" accessibilityLabel="eyelevel home" onPress={() => router.navigate("/")}>
+    <Pressable accessibilityRole="link" accessibilityLabel="eyelevel home" onPress={() => router.dismissTo("/")}>
       <AppText style={[styles.wordmark, { color: colors.textStrong }]}>
         eye<AppText style={[styles.wordmark, { color: colors.primary }]}>level</AppText>
       </AppText>
     </Pressable>
+  );
+}
+
+/**
+ * Header for the tab screens. Rendered by us (instead of react-navigation's
+ * Header) because that one sizes itself from a window measurement taken at
+ * module load, which differs between static rendering and the browser and
+ * breaks hydration.
+ */
+export function TabHeader() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ paddingTop: insets.top, backgroundColor: colors.background }} {...({ role: "banner" } as object)}>
+      <View style={styles.tabHeader}>
+        <Wordmark />
+        <View style={{ flex: 1 }} />
+        <HeaderActions />
+      </View>
+    </View>
   );
 }
 
@@ -112,4 +133,5 @@ export function RequireAccount({
 const styles = StyleSheet.create({
   wordmark: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
   actions: { flexDirection: "row", alignItems: "center", gap: 4, marginRight: 12 },
+  tabHeader: { height: 64, flexDirection: "row", alignItems: "center", paddingLeft: 16 },
 });

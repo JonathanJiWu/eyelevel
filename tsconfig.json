@@ -4,9 +4,25 @@
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": [
+        "./*"
+      ]
+    },
+    "module": "ESNext",
+    "moduleResolution": "bundler"
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "dist", "android", "ios", "test-results", "playwright-report"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "android",
+    "ios",
+    "test-results",
+    "playwright-report"
+  ]
 }

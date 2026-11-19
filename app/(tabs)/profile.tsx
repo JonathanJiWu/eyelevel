@@ -101,7 +101,7 @@ function ProfileContent() {
               try {
                 await signOut();
                 toast("Signed out");
-                router.navigate("/");
+                router.dismissTo("/");
               } catch (e) {
                 toast(friendlyError(e), { type: "error" });
               }
@@ -286,7 +286,7 @@ function PreferencesCard() {
             icon="explore"
             variant="ghost"
             onPress={() =>
-              router.push({
+              router.dismissTo({
                 pathname: "/",
                 params: {
                   genres: userDoc.preferences.favoriteGenres.join(","),
@@ -369,31 +369,28 @@ function ThemeCard() {
   );
 }
 
+// Sheets mount their form only while open so state is initialized
+// synchronously on every open (no reset effect racing user input).
 function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { profile } = useAuth();
+  return visible && profile ? <EditProfileForm onClose={onClose} /> : null;
+}
+
+function EditProfileForm({ onClose }: { onClose: () => void }) {
   const { profile, updateProfile, user } = useAuth();
   const { toast } = useFeedback();
   const { colors } = useTheme();
-  const [displayName, setDisplayName] = useState("");
-  const [username, setUsername] = useState("");
-  const [bio, setBio] = useState("");
-  const [color, setColor] = useState(AVATAR_COLORS[0]);
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
+  const [username, setUsername] = useState(profile?.username ?? "");
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [color, setColor] = useState(profile?.avatarColor ?? AVATAR_COLORS[0]);
   const [errors, setErrors] = useState<{ displayName?: string | null; username?: string | null; form?: string | null }>({});
   const [availability, setAvailability] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const [saving, setSaving] = useState(false);
   const debouncedUsername = useDebouncedValue(username.trim(), 400);
 
   useEffect(() => {
-    if (!visible || !profile) return;
-    setDisplayName(profile.displayName);
-    setUsername(profile.username);
-    setBio(profile.bio);
-    setColor(profile.avatarColor);
-    setErrors({});
-    setAvailability("idle");
-  }, [visible, profile]);
-
-  useEffect(() => {
-    if (!visible || !profile || debouncedUsername.toLowerCase() === profile.usernameLower || validateUsername(debouncedUsername)) {
+    if (!profile || debouncedUsername.toLowerCase() === profile.usernameLower || validateUsername(debouncedUsername)) {
       setAvailability("idle");
       return;
     }
@@ -405,7 +402,7 @@ function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () 
     return () => {
       cancelled = true;
     };
-  }, [debouncedUsername, visible, profile, user]);
+  }, [debouncedUsername, profile, user]);
 
   const submit = async () => {
     const next = { displayName: validateDisplayName(displayName), username: validateUsername(username) };
@@ -426,7 +423,7 @@ function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () 
 
   return (
     <Sheet
-      visible={visible}
+      visible
       onClose={onClose}
       title="Edit profile"
       testID="edit-profile-sheet"
@@ -469,6 +466,10 @@ function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () 
 }
 
 function ChangePasswordSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  return visible ? <ChangePasswordForm onClose={onClose} /> : null;
+}
+
+function ChangePasswordForm({ onClose }: { onClose: () => void }) {
   const { changePassword } = useAuth();
   const { toast } = useFeedback();
   const [current, setCurrent] = useState("");
@@ -476,14 +477,6 @@ function ChangePasswordSheet({ visible, onClose }: { visible: boolean; onClose: 
   const [confirm, setConfirm] = useState("");
   const [errors, setErrors] = useState<{ current?: string | null; next?: string | null; confirm?: string | null; form?: string | null }>({});
   const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    if (visible) {
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setErrors({});
-    }
-  }, [visible]);
   const submit = async () => {
     const e = {
       current: current ? null : "Enter your current password.",
@@ -505,7 +498,7 @@ function ChangePasswordSheet({ visible, onClose }: { visible: boolean; onClose: 
   };
   return (
     <Sheet
-      visible={visible}
+      visible
       onClose={onClose}
       title="Change password"
       footer={
@@ -524,6 +517,10 @@ function ChangePasswordSheet({ visible, onClose }: { visible: boolean; onClose: 
 }
 
 function DeleteAccountSheet({ visible, usesPassword, onClose }: { visible: boolean; usesPassword: boolean; onClose: () => void }) {
+  return visible ? <DeleteAccountForm usesPassword={usesPassword} onClose={onClose} /> : null;
+}
+
+function DeleteAccountForm({ usesPassword, onClose }: { usesPassword: boolean; onClose: () => void }) {
   const { deleteAccount } = useAuth();
   const { toast } = useFeedback();
   const router = useRouter();
@@ -531,16 +528,9 @@ function DeleteAccountSheet({ visible, usesPassword, onClose }: { visible: boole
   const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (visible) {
-      setPassword("");
-      setConfirmText("");
-      setError(null);
-    }
-  }, [visible]);
   return (
     <Sheet
-      visible={visible}
+      visible
       onClose={onClose}
       title="Delete account"
       testID="delete-account-sheet"
@@ -560,7 +550,7 @@ function DeleteAccountSheet({ visible, usesPassword, onClose }: { visible: boole
                 await deleteAccount(usesPassword ? password : null);
                 onClose();
                 toast("Your account was deleted");
-                router.navigate("/");
+                router.dismissTo("/");
               } catch (e) {
                 setError(friendlyError(e));
               } finally {

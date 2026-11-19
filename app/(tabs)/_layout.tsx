@@ -1,53 +1,22 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
 import { Tabs } from "expo-router";
 import React from "react";
-import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HeaderActions, Wordmark } from "@/src/components/AppChrome";
-import { AppText } from "@/src/components/ui/AppText";
+import { TabHeader } from "@/src/components/AppChrome";
 import { useSocial } from "@/src/context/SocialContext";
 import { useTheme } from "@/src/context/ThemeContext";
 
-function RequestsBadge({ color, size }: { color: string; size: number }) {
-  const { incoming } = useSocial();
-  const { colors } = useTheme();
-  return (
-    <View>
-      <MaterialIcons name="group" size={size} color={color} />
-      {incoming.length > 0 ? (
-        <View
-          accessibilityLabel={`${incoming.length} pending friend requests`}
-          style={{
-            position: "absolute",
-            top: -4,
-            right: -10,
-            minWidth: 18,
-            height: 18,
-            borderRadius: 9,
-            backgroundColor: colors.danger,
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 4,
-          }}
-        >
-          <AppText style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{incoming.length}</AppText>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export default function TabLayout() {
   const { colors } = useTheme();
+  const { incoming } = useSocial();
+  const pending = incoming.length;
   const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTitle: () => <Wordmark />,
-        headerTitleAlign: "left",
-        headerRight: () => <HeaderActions />,
+        header: () => <TabHeader />,
         sceneStyle: { backgroundColor: colors.background },
         tabBarStyle: {
           backgroundColor: colors.tabBar,
@@ -62,6 +31,9 @@ export default function TabLayout() {
         // A fixed label position keeps server-rendered HTML identical to the
         // first client render (the default depends on window width).
         tabBarLabelPosition: "below-icon",
+        // Tab links point at the tab itself, without the current query string,
+        // so statically rendered HTML and the browser agree on the href.
+        tabBarButton: (props: BottomTabBarButtonProps) => <PlatformPressable {...props} href={props.href?.split("?")[0]} />,
       }}
     >
       <Tabs.Screen
@@ -85,7 +57,10 @@ export default function TabLayout() {
         options={{
           title: "Friends",
           tabBarButtonTestID: "tab-friends",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <RequestsBadge color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => <MaterialIcons name="group" size={size} color={color} />,
+          tabBarBadge: pending > 0 ? pending : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.danger, color: "#FFFFFF", fontWeight: "700" },
+          tabBarAccessibilityLabel: pending > 0 ? `Friends, ${pending} pending friend request${pending === 1 ? "" : "s"}` : "Friends",
         }}
       />
       <Tabs.Screen

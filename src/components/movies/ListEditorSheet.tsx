@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/src/components/ui/Button";
 import { Chip, ChipRow } from "@/src/components/ui/Chip";
 import { Sheet } from "@/src/components/ui/Sheet";
@@ -16,38 +16,31 @@ export interface ListDraft {
   visibility: Visibility;
 }
 
-/** Create / edit a watchlist's name, description and visibility. */
-export function ListEditorSheet({
-  visible,
-  title,
-  initial,
-  submitLabel,
-  onSubmit,
-  onClose,
-}: {
+interface ListEditorProps {
   visible: boolean;
   title: string;
   initial?: Partial<ListDraft>;
   submitLabel: string;
   onSubmit: (draft: ListDraft) => Promise<void>;
   onClose: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [visibility, setVisibility] = useState<Visibility>("friends");
+}
+
+/**
+ * Create / edit a watchlist's name, description and visibility.
+ * The form only exists while open, so its state is initialized synchronously
+ * from `initial` every time it opens (no reset effect racing user input).
+ */
+export function ListEditorSheet(props: ListEditorProps) {
+  return props.visible ? <ListEditorForm {...props} /> : null;
+}
+
+function ListEditorForm({ title, initial, submitLabel, onSubmit, onClose }: ListEditorProps) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [visibility, setVisibility] = useState<Visibility>(initial?.visibility ?? "friends");
   const [nameError, setNameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!visible) return;
-    setName(initial?.name ?? "");
-    setDescription(initial?.description ?? "");
-    setVisibility(initial?.visibility ?? "friends");
-    setNameError(null);
-    setError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
 
   const submit = async () => {
     const problem = validateListName(name);
@@ -69,7 +62,7 @@ export function ListEditorSheet({
 
   return (
     <Sheet
-      visible={visible}
+      visible
       onClose={onClose}
       title={title}
       testID="list-editor"

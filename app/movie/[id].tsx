@@ -49,9 +49,9 @@ export default function MovieScreen() {
   const id = Number(rawId);
   const valid = Number.isInteger(id) && id > 0;
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, hydrated } = useTheme();
   const { isWide, columns, contentWidth } = useResponsive();
-  const { user } = useAuth();
+  const { user, waitForAuth } = useAuth();
   const library = useLibrary();
   const social = useSocial();
   const { openPicker, quickSave, savingId } = useSaveMovie();
@@ -77,6 +77,15 @@ export default function MovieScreen() {
     return () => controller.abort();
   }, [id, valid, attempt]);
 
+  // Statically rendered HTML for /movie/[id] is a template (the id is only
+  // known in the browser), so render the loading state until hydrated.
+  if (!hydrated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LoadingState label="Loading movie…" />
+      </View>
+    );
+  }
   if (!valid) {
     return <ErrorState title="Movie not found" message="That link doesn't point to a valid movie." />;
   }
@@ -116,8 +125,8 @@ export default function MovieScreen() {
   const recColumns = columns(140, 6);
   const recWidth = Math.floor((contentWidth - 12 * (recColumns - 1)) / recColumns);
 
-  const requireUser = () => {
-    if (!user) {
+  const requireUser = async () => {
+    if (!(await waitForAuth())) {
       router.push({ pathname: "/login", params: { redirect: `/movie/${movie.id}` } });
       return false;
     }
@@ -125,7 +134,7 @@ export default function MovieScreen() {
   };
 
   const toggleWatched = async () => {
-    if (!requireUser()) return;
+    if (!(await requireUser())) return;
     setBusy("watched");
     try {
       await library.setWatched(snapshot, !entry?.watched);
@@ -138,7 +147,7 @@ export default function MovieScreen() {
   };
 
   const rate = async (value: number | null) => {
-    if (!requireUser()) return;
+    if (!(await requireUser())) return;
     setBusy("rating");
     try {
       await library.setRating(snapshot, value);
@@ -187,7 +196,7 @@ export default function MovieScreen() {
             {movie.genres.length ? (
               <ChipRow>
                 {movie.genres.map((g) => (
-                  <Chip key={g.id} label={g.name} onPress={() => router.push({ pathname: "/", params: { genres: String(g.id) } })} />
+                  <Chip key={g.id} label={g.name} onPress={() => router.dismissTo({ pathname: "/", params: { genres: String(g.id) } })} />
                 ))}
               </ChipRow>
             ) : null}

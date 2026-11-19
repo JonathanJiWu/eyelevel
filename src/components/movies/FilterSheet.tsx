@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { AppText } from "@/src/components/ui/AppText";
 import { Button } from "@/src/components/ui/Button";
@@ -31,19 +31,20 @@ function Section({ title, children, hint }: { title: string; children: React.Rea
   );
 }
 
-export function FilterSheet({
-  visible,
-  filters,
-  searching,
-  onApply,
-  onClose,
-}: {
+interface FilterSheetProps {
   visible: boolean;
   filters: MovieFilters;
   searching: boolean;
   onApply: (filters: MovieFilters) => void;
   onClose: () => void;
-}) {
+}
+
+/** Combined filter editor. The draft is created fresh each time it opens. */
+export function FilterSheet(props: FilterSheetProps) {
+  return props.visible ? <FilterForm {...props} /> : null;
+}
+
+function FilterForm({ filters, searching, onApply, onClose }: FilterSheetProps) {
   const { genres, languages } = useReferenceData();
   const [draft, setDraft] = useState<MovieFilters>(filters);
   const [yearFrom, setYearFrom] = useState(filters.yearFrom?.toString() ?? "");
@@ -51,14 +52,6 @@ export function FilterSheet({
   const [yearError, setYearError] = useState<string | null>(null);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
   const [languageQuery, setLanguageQuery] = useState("");
-
-  useEffect(() => {
-    if (!visible) return;
-    setDraft(filters);
-    setYearFrom(filters.yearFrom?.toString() ?? "");
-    setYearTo(filters.yearTo?.toString() ?? "");
-    setYearError(null);
-  }, [visible, filters]);
 
   const set = (patch: Partial<MovieFilters>) => setDraft((d) => ({ ...d, ...patch }));
   const toggleGenre = (id: number) =>
@@ -97,7 +90,7 @@ export function FilterSheet({
 
   return (
     <Sheet
-      visible={visible}
+      visible
       onClose={onClose}
       title="Filters"
       testID="filter-sheet"

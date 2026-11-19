@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { addToLists, expect, newUserPage, test, toast, type TestUser } from "./helpers";
+import { addToLists, expect, newUserPage, test, toast, type TestUser, visible } from "./helpers";
 
 const INCEPTION = 27205;
 const INTERSTELLAR = 157336;
@@ -52,7 +52,7 @@ test("friends: requests, shared lists, privacy boundaries and watchlist comparis
 
   // Bob sees the request (live) with a badge, and accepts it.
   await bob.page.goto("/friends");
-  await expect(bob.page.getByLabel("1 pending friend requests")).toBeVisible();
+  await expect(visible(bob.page.getByTestId("tab-friends"))).toHaveAttribute("aria-label", "Friends, 1 pending friend request");
   const request = bob.page.getByTestId("incoming-requests").getByTestId(`user-row-${alice.user.username}`);
   await request.getByRole("button", { name: "Accept" }).click();
   await expect(toast(bob.page)).toContainText(`You and ${alice.user.displayName} are now friends`);

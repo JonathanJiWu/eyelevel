@@ -16,11 +16,10 @@ import { useLibrary } from "@/src/context/LibraryContext";
 import { useSaveMovie } from "@/src/context/SaveMovieContext";
 import { useSocial } from "@/src/context/SocialContext";
 import { useTheme } from "@/src/context/ThemeContext";
-import { useDebouncedValue } from "@/src/hooks/useDebouncedValue";
 import { useMovieFeed } from "@/src/hooks/useMovieFeed";
 import { useResponsive } from "@/src/hooks/useResponsive";
 import { participantFromSharedIndex, popularAmongFriends } from "@/src/lib/compare";
-import { countActiveFilters, filtersToParams, hasActiveCriteria, parseFilters, sameFilters, type MovieFilters } from "@/src/lib/filters";
+import { countActiveFilters, defaultFilters, filtersToParams, hasActiveCriteria, parseFilters, sameFilters, type MovieFilters } from "@/src/lib/filters";
 import { cleanSearchParams } from "@/src/lib/params";
 import { MIN_QUERY_LENGTH } from "@/src/lib/search";
 import { radius, spacing } from "@/src/theme/colors";
@@ -28,6 +27,11 @@ import { shadow } from "@/src/theme/shadow";
 import type { MovieSummary } from "@/src/types/movies";
 
 const GAP = 12;
+/** Order-independent key for a params object. */
+function paramsKey(params: Record<string, string>): string {
+  return JSON.stringify(Object.keys(params).sort().map((k) => [k, params[k]]));
+}
+
 const FILTER_KEYS = ["genres", "genreMode", "yearFrom", "yearTo", "ratingMin", "votesMin", "language", "runtime", "certification", "sort"];
 
 export default function DiscoverScreen() {
@@ -39,33 +43,58 @@ export default function DiscoverScreen() {
   const library = useLibrary();
   const { quickSave, savingId } = useSaveMovie();
 
-  const [input, setInput] = useState(() => (typeof params.q === "string" ? params.q : ""));
-  const [filters, setFilters] = useState<MovieFilters>(() => parseFilters(params));
+  // Initial state is always the defaults so the statically rendered HTML and
+  // the first client render match; URL params are applied right after mount.
+  const [input, setInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<MovieFilters>(defaultFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const query = useDebouncedValue(input, 350);
   const searching = query.trim().length >= MIN_QUERY_LENGTH;
   const feed = useMovieFeed(query, filters);
 
-  // Keep state in sync with the URL (shareable searches, back/forward, refresh).
+  // Debounce typing (no request per keystroke).
   useEffect(() => {
-    const fromUrl = parseFilters(params);
-    setFilters((current) => (sameFilters(current, fromUrl) ? current : fromUrl));
-    const q = typeof params.q === "string" ? params.q : "";
-    setInput((current) => (current.trim() === q.trim() ? current : q));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(params)]);
+    const timer = setTimeout(() => setQuery(input), 350);
+    return () => clearTimeout(timer);
+  }, [input]);
+
+  // Two-way sync with the URL (shareable searches, refresh, back/forward).
+  const current = useRef({ query, filters });
+  current.current = { query, filters };
+  const lastUrlKey = useRef<string | null>(null);
+  const skipNextUrlWrite = useRef(false);
+  const urlKey = paramsKey(params);
 
   useEffect(() => {
-    const next: Record<string, string | undefined> = { q: query.trim() || undefined };
-    for (const key of FILTER_KEYS) next[key] = undefined;
-    Object.assign(next, filtersToParams(filters));
-    const current = params;
-    const wanted = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
-    if (JSON.stringify(current, Object.keys(current).sort()) !== JSON.stringify(wanted, Object.keys(wanted).sort())) {
-      router.setParams(next);
+    // URL -> state, unless this URL is the one we just wrote ourselves.
+    if (lastUrlKey.current === urlKey) return;
+    lastUrlKey.current = urlKey;
+    const fromUrl = parseFilters(params);
+    const q = params.q ?? "";
+    const changed = !sameFilters(current.current.filters, fromUrl) || current.current.query.trim() !== q.trim();
+    if (!changed) return;
+    skipNextUrlWrite.current = true;
+    setFilters(fromUrl);
+    setInput(q);
+    setQuery(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlKey]);
+
+  useEffect(() => {
+    // state -> URL (skipped once after applying the URL, when state is stale).
+    if (skipNextUrlWrite.current) {
+      skipNextUrlWrite.current = false;
+      return;
     }
+    const wanted: Record<string, string> = { ...(query.trim() ? { q: query.trim() } : {}), ...filtersToParams(filters) };
+    const key = paramsKey(wanted);
+    if (key === urlKey) return;
+    lastUrlKey.current = key;
+    const next: Record<string, string | undefined> = { q: undefined };
+    for (const name of FILTER_KEYS) next[name] = undefined;
+    router.setParams({ ...next, ...wanted });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filters]);
 

@@ -1,3 +1,5 @@
+import { MaterialIcons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
@@ -51,6 +53,11 @@ const WEB_INITIAL_METRICS: Metrics = {
 };
 
 export default function RootLayout() {
+  // Load the icon font during static rendering too: the server then renders
+  // icon glyphs and embeds the @font-face rule in the HTML, so the first
+  // client render matches (otherwise hydration fails for icons in lazily
+  // hydrated screens). Rendering is not blocked while it loads.
+  useFonts(MaterialIcons.font);
   return (
     <SafeAreaProvider initialMetrics={Platform.OS === "web" ? WEB_INITIAL_METRICS : undefined}>
       <ThemeProvider>

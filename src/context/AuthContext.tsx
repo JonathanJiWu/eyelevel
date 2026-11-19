@@ -78,6 +78,8 @@ interface AuthValue {
   updatePrivacy: (privacy: PrivacySettings) => Promise<void>;
   updatePreferences: (preferences: Preferences) => Promise<void>;
   retrySetup: () => void;
+  /** Resolves with the signed-in user (or null) once the session is restored. */
+  waitForAuth: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -102,18 +104,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setupInFlight = useRef(new Map<string, Promise<void>>());
   // While an account is being deleted its profile disappears; never "repair" it.
   const deleting = useRef(false);
+  const initializingRef = useRef(true);
+  const userRef = useRef<User | null>(null);
+  const authWaiters = useRef<((user: User | null) => void)[]>([]);
 
   useEffect(() => {
+    const settle = (next: User | null) => {
+      userRef.current = next;
+      initializingRef.current = false;
+      const waiters = authWaiters.current;
+      authWaiters.current = [];
+      waiters.forEach((resolve) => resolve(next));
+    };
     if (!canUseFirebase()) {
       setInitializing(false);
+      settle(null);
       return;
     }
     const { auth } = getFirebase();
     return onAuthStateChanged(auth, (next) => {
       setUser(next);
       setInitializing(false);
+      settle(next);
     });
   }, []);
+
+  const waitForAuth = useCallback(
+    () =>
+      initializingRef.current
+        ? new Promise<User | null>((resolve) => authWaiters.current.push(resolve))
+        : Promise.resolve(userRef.current),
+    [],
+  );
 
   // Subscribe to the signed-in user's profile and private doc.
   useEffect(() => {
@@ -367,6 +389,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccountError(null);
         setSetupAttempt((n) => n + 1);
       },
+      waitForAuth,
     }),
     [
       initializing,
@@ -387,6 +410,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       updatePrivacy,
       updatePreferences,
+      waitForAuth,
     ],
   );
 
