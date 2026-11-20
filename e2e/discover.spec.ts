@@ -125,16 +125,19 @@ test.describe("discovery", () => {
     await page.goto("/");
     const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
     await expect(cards.first()).toBeVisible();
-    // The first page fills this screen: nothing else loads until the user scrolls.
+    // Without scrolling, at most the next page is prefetched (when the end of
+    // the first page is already near); nothing keeps loading on its own.
     await page.waitForTimeout(1500);
-    expect(await cards.count()).toBe(20);
+    const initial = await cards.count();
+    expect(initial).toBeGreaterThanOrEqual(20);
+    expect(initial).toBeLessThanOrEqual(40);
     // Scroll like a person does (wheel events), until two more pages loaded.
     await page.getByTestId("movie-grid").hover();
-    for (let i = 0; i < 15 && (await cards.count()) <= 40; i++) {
+    for (let i = 0; i < 15 && (await cards.count()) <= initial + 20; i++) {
       await page.mouse.wheel(0, 1200);
       await page.waitForTimeout(300);
     }
-    await expect.poll(() => cards.count()).toBeGreaterThan(40);
+    await expect.poll(() => cards.count()).toBeGreaterThan(initial + 20);
     const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
     expect(new Set(ids).size).toBe(ids.length);
   });
