@@ -116,13 +116,20 @@ npm ci && npm run build:web && TMDB_API_KEY=... PORT=3000 npm run serve
 
 ## 4. Verify a deployment
 
-1. `GET https://<your-domain>/api/health` → `{"ok":true,"tmdbConfigured":true,...}`. If `tmdbConfigured` is `false`, the TMDB variable is missing on the server.
-2. Open the site: the Discover grid loads, search and filters work, a movie page shows details.
-3. Create an account → you land on Discover signed in; reload — still signed in.
-4. Save a movie, create a list, rate a movie; sign out and back in — everything is still there.
-5. Request a password reset — the email arrives.
-6. With a second account: send a friend request, accept it, open the friend's profile, compare watchlists.
-7. Security headers: `curl -sI https://<your-domain>/ | grep -i content-security-policy` shows the policy. Open the browser console on a few pages: there must be no "Refused to load / connect" messages. To try a policy change safely, deploy with `CSP_REPORT_ONLY=true` first.
+Run the automated check first. It covers health and the TMDB key, movie data, pages and the 404 page, security headers, asset caching, and the Firebase config in the bundle:
+
+```bash
+npm run verify:deploy -- https://<your-domain>
+```
+
+Then check by hand what needs a person (and email):
+
+1. Open the site: the Discover grid loads, search and filters work, a movie page shows details.
+2. Create an account → you land on Discover signed in; reload — still signed in.
+3. Save a movie, create a list, rate a movie; sign out and back in — everything is still there.
+4. Request a password reset — the email arrives.
+5. With a second account: send a friend request, accept it, open the friend's profile, compare watchlists.
+6. Open the browser console on a few pages: there must be no "Refused to load / connect" messages from the Content-Security-Policy. To try a policy change safely, deploy with `CSP_REPORT_ONLY=true` first.
 
 ## 5. Redeploy / roll back
 

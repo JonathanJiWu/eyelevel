@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 });
 
 // Hashed bundles never change: cache for a year.
-app.use("/_expo/static", express.static(path.join(CLIENT_DIR, "_expo", "static"), { immutable: true, maxAge: "1y", fallthrough: false }));
+app.use("/_expo/static", express.static(path.join(CLIENT_DIR, "_expo", "static"), { immutable: true, maxAge: "1y", fallthrough: false, index: false }));
 app.use(express.static(CLIENT_DIR, { maxAge: "1h", index: false }));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
@@ -53,6 +53,12 @@ app.all("*", createRequestHandler({ build: SERVER_DIR }, { beforeResponse: cspRe
 
 // Last-resort error handler: never leak stack traces.
 app.use((error, _req, res, _next) => {
+  const status = Number(error.status || error.statusCode) || 500;
+  if (status < 500) {
+    // e.g. a missing file under /_expo/static (express.static reports 404)
+    if (!res.headersSent) res.status(status).json({ error: { code: status === 404 ? "not_found" : "invalid_request", message: status === 404 ? "Not found." : "Bad request." } });
+    return;
+  }
   console.error("[server] Unhandled error:", error);
   if (!res.headersSent) res.status(500).json({ error: { code: "internal_error", message: "Something went wrong on our side." } });
 });
