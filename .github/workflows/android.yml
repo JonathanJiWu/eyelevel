@@ -1,0 +1,61 @@
+name: Android build
+
+# Generates the native Android project from app.json (expo prebuild) and
+# compiles a release APK, so SDK and dependency upgrades are verified on
+# native too. Runs when dependencies or native configuration change, and on
+# demand (Actions → Android build → Run workflow).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - package.json
+      - package-lock.json
+      - app.json
+      - eas.json
+      - metro.config.js
+      - .github/workflows/android.yml
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - app.json
+      - eas.json
+      - metro.config.js
+      - .github/workflows/android.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Prebuild + release APK (arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Generate the native project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: 1
+      - name: Compile the release APK (embeds the JS bundle)
+        working-directory: android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eyelevel-android-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 7

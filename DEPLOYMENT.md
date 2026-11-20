@@ -128,7 +128,7 @@ npm ci && npm run build:web && TMDB_API_KEY=... PORT=3000 npm run serve
 
 - **App:** push to `master` (Vercel builds and deploys automatically). Roll back from *Vercel → Deployments → ⋯ → Promote to Production* on an earlier deployment.
 - **Firestore rules / indexes:** `npm run deploy:firestore -- --project eyelevel-2025` after editing `firestore.rules` / `firestore.indexes.json`. Run `npm run test:rules` first.
-- **CI:** `.github/workflows/ci.yml` runs typecheck, lint, unit/API tests, Firestore rules tests, the production build and the Playwright end-to-end suite on every push.
+- **CI:** `.github/workflows/ci.yml` runs typecheck, lint, unit/API tests, Firestore rules tests, the production build and the Playwright end-to-end suite on every push. `.github/workflows/android.yml` generates the Android project and compiles a release APK whenever dependencies or native configuration change (or on demand), and keeps the APK as a downloadable artifact for 7 days.
 
 ## Environment variables reference
 

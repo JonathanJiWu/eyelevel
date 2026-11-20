@@ -96,7 +96,7 @@ npm run web
 
 ## Deployment
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions (Firebase setup, rules deployment, Vercel or Docker, environment variables, verification and rollback).
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions (Firebase setup, rules deployment, Vercel or Docker, environment variables, verification and rollback). iOS and Android apps are built with EAS Build from the same code; the native projects are generated from `app.json` and not committed (see *Native apps* in DEPLOYMENT.md).
 
 ## License
 
