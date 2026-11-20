@@ -4,7 +4,7 @@
  * across refreshes, devices and sessions).
  */
 import { onSnapshot, Timestamp } from "firebase/firestore";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   createList as createListOp,
   deleteList as deleteListOp,
@@ -112,7 +112,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
   // Always hand mutations the freshest state (avoids stale closures).
   const stateRef = useRef<LibraryState>({ lists, library, privacy });
-  stateRef.current = { lists, library, privacy };
+  useLayoutEffect(() => {
+    stateRef.current = { lists, library, privacy };
+  });
 
   // Self-heal the friends-visible index (e.g. after edits on another device
   // or a privacy change). Only runs when everything is synced with the server.
@@ -144,7 +146,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   }, [lists, library]);
 
   const summariesRef = useRef(summaries);
-  summariesRef.current = summaries;
+  useLayoutEffect(() => {
+    summariesRef.current = summaries;
+  });
   const byMovie = useMemo(() => new Map(library.map((e) => [e.movieId, e])), [library]);
   const listIds = useMemo(() => new Set(lists.map((l) => l.id)), [lists]);
   const defaultList = summaries[0] ?? null;
@@ -152,9 +156,11 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   // Actions triggered while the library is still loading (e.g. right after
   // signing up) wait for it instead of failing.
   const readyRef = useRef(ready);
-  readyRef.current = ready;
   const uidRef = useRef(uid);
-  uidRef.current = uid;
+  useLayoutEffect(() => {
+    readyRef.current = ready;
+    uidRef.current = uid;
+  });
   const waiters = useRef<(() => void)[]>([]);
   useEffect(() => {
     if (!ready) return;

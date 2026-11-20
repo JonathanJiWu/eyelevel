@@ -13,7 +13,8 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const compression = require("compression");
-const { createRequestHandler } = require("@expo/server/adapter/express");
+const { createRequestHandler } = require("expo-server/adapter/express");
+const { cspResponseHook } = require("./csp");
 
 const ROOT = path.join(__dirname, "..");
 const DIST_DIR = path.resolve(ROOT, process.env.EXPO_DIST_DIR || "dist");
@@ -47,8 +48,8 @@ app.use(express.static(CLIENT_DIR, { maxAge: "1h", index: false }));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
-// Pages (pre-rendered HTML) and /api/* routes.
-app.all("*", createRequestHandler({ build: SERVER_DIR }));
+// Pages (pre-rendered HTML, with a Content-Security-Policy) and /api/* routes.
+app.all("*", createRequestHandler({ build: SERVER_DIR }, { beforeResponse: cspResponseHook(SERVER_DIR) }));
 
 // Last-resort error handler: never leak stack traces.
 app.use((error, _req, res, _next) => {

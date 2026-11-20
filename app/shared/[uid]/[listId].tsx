@@ -56,7 +56,7 @@ function SharedListContent() {
       <View style={{ gap: 4 }}>
         <AppText variant="display">{list.n}</AppText>
         <AppText variant="muted">
-          {name}'s list · {movies.length} movie{movies.length === 1 ? "" : "s"} · {inCommon} also in your lists
+          {name}&apos;s list · {movies.length} movie{movies.length === 1 ? "" : "s"} · {inCommon} also in your lists
         </AppText>
         {list.d ? <AppText>{list.d}</AppText> : null}
       </View>

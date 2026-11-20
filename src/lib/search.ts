@@ -6,6 +6,13 @@ import type { MovieSummary } from "@/src/types/movies";
 
 export const MAX_QUERY_LENGTH = 100;
 export const MIN_QUERY_LENGTH = 2;
+/**
+ * TMDB search can't filter or sort, so when a query is combined with filters
+ * or a custom sort the server does it over the top SEARCH_SCAN_PAGES pages
+ * of matches (TMDB serves 20 per page).
+ */
+export const SEARCH_SCAN_PAGES = 25;
+export const SEARCH_SCAN_RESULTS = SEARCH_SCAN_PAGES * 20;
 
 /** Trim, collapse whitespace, normalize unicode and cap length. */
 export function normalizeQuery(input: string): string {

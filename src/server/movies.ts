@@ -1,22 +1,36 @@
 /**
  * Movie data operations used by the API routes.
  */
+import { LruCache } from "@/src/lib/cache";
 import {
-  activeBrowseOnlyFilters,
+  matchesMovieFacts,
+  needsMovieFacts,
   searchNeedsAggregation,
   toTmdbDiscoverParams,
   type MovieFilters,
 } from "@/src/lib/filters";
-import { dedupeMovies, MIN_QUERY_LENGTH, normalizeQuery, rankByRelevance, searchVariants } from "@/src/lib/search";
-import type { Genre, Language, MovieDetails, MoviePage, MovieSummary } from "@/src/types/movies";
-import { sortLanguages, toGenres, toLanguages, toMovieDetails, toMovieSummaries } from "./normalize";
+import { dedupeMovies, MIN_QUERY_LENGTH, normalizeQuery, rankByRelevance, SEARCH_SCAN_PAGES, searchVariants } from "@/src/lib/search";
+import type { Genre, Language, MovieDetails, MovieFacts, MoviePage, MovieSummary } from "@/src/types/movies";
+import { sortLanguages, toGenres, toLanguages, toMovieDetails, toMovieFacts, toMovieSummaries } from "./normalize";
 import { tmdbGet, TmdbError, TTL } from "./tmdb";
 
 export const PAGE_SIZE = 20;
 /** TMDB never serves pages beyond 500. */
 export const MAX_UPSTREAM_PAGE = 500;
-/** Upstream search pages aggregated when a query is combined with filters. */
-export const AGGREGATE_PAGES = 5;
+export { SEARCH_SCAN_PAGES };
+/** Upstream search pages fetched in parallel while scanning. */
+const SCAN_BATCH = 5;
+/**
+ * Runtime and age rating aren't part of search results, so those filters
+ * need one details lookup per candidate (cached for a day). Lookups that miss
+ * the cache are capped per request; the `nextStart` cursor continues from
+ * where a request stopped, so every request makes progress even when it is
+ * served by an instance with a cold cache.
+ */
+export const FACT_LOOKUP_BUDGET = 60;
+const FACT_CONCURRENCY = 10;
+/** Highest `start` cursor accepted: the scan window plus room for fuzzy extras. */
+export const MAX_SEARCH_START = SEARCH_SCAN_PAGES * PAGE_SIZE + 100;
 
 interface RawPage {
   page?: number;
@@ -40,7 +54,6 @@ export async function discoverMovies(filters: MovieFilters, page: number): Promi
     totalResults,
     results: toMovieSummaries(raw.results),
     mode: "discover",
-    ignoredFilters: [],
     truncated: Number(raw.total_pages) > MAX_UPSTREAM_PAGE,
     fuzzy: false,
   };
@@ -50,6 +63,7 @@ async function searchPage(query: string, page: number): Promise<RawPage> {
   return tmdbGet<RawPage>("/search/movie", { query, page, include_adult: false }, TTL.list);
 }
 
+/** Filters that can be checked on search results directly (everything but runtime and age rating). */
 function applyFilters(movies: MovieSummary[], filters: MovieFilters): MovieSummary[] {
   return movies.filter((m) => {
     if (filters.genres.length) {
@@ -88,18 +102,117 @@ function sortMovies(movies: MovieSummary[], sort: MovieFilters["sort"]): MovieSu
   }
 }
 
+/** Movie facts (runtime, US age rating). `null` = TMDB no longer has the movie. */
+const factsCache = new LruCache<MovieFacts | null>(20000);
+
+/** Test helper: forget cached movie facts. */
+export function __resetMovieCaches() {
+  factsCache.clear();
+}
+
+/** Runtime and US age rating of one movie, or null if TMDB doesn't have it. Cached for a day. */
+export async function getMovieFacts(id: number): Promise<MovieFacts | null> {
+  const key = String(id);
+  const cached = factsCache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    // Not stored in the shared response cache: only the two fields are kept.
+    const raw = await tmdbGet(`/movie/${id}`, { append_to_response: "release_dates" }, TTL.reference, { cache: false });
+    const facts = toMovieFacts(raw);
+    factsCache.set(key, facts, TTL.reference);
+    return facts;
+  } catch (error) {
+    if (error instanceof TmdbError && error.status === 404) {
+      factsCache.set(key, null, TTL.details);
+      return null;
+    }
+    const stale = factsCache.getStale(key);
+    if (stale !== undefined) return stale;
+    throw error;
+  }
+}
+
+/** Facts for each movie in order; `undefined` where the lookup budget ran out first. */
+async function lookupFacts(movies: MovieSummary[], budget: { remaining: number }) {
+  return Promise.all(
+    movies.map((m): Promise<MovieFacts | null | undefined> => {
+      const cached = factsCache.get(String(m.id));
+      if (cached !== undefined) return Promise.resolve(cached);
+      if (budget.remaining <= 0) return Promise.resolve(undefined);
+      budget.remaining--;
+      return getMovieFacts(m.id);
+    }),
+  );
+}
+
 /**
- * Text search. Without filters this is a straight pass-through of TMDB pages.
- * With filters or a custom sort, the top AGGREGATE_PAGES upstream pages are
- * fetched (cached), filtered and sorted server-side, then re-paginated.
- * If the first page has very few hits, spelling-tolerant variants are tried.
+ * Upstream search results in TMDB relevance order, deduplicated. Pages are
+ * fetched on demand, a few in parallel, up to SEARCH_SCAN_PAGES.
  */
-export async function searchMovies(rawQuery: string, filters: MovieFilters, page: number): Promise<MoviePage> {
+async function openSearchScan(query: string) {
+  const first = await searchPage(query, 1);
+  const { totalPages, totalResults } = pageInfo(first);
+  const lastPage = Math.min(SEARCH_SCAN_PAGES, totalPages);
+  const movies: MovieSummary[] = [];
+  const seen = new Set<number>();
+  const add = (list: MovieSummary[]) => {
+    for (const m of list) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      movies.push(m);
+    }
+  };
+  let initial = toMovieSummaries(first.results);
+  let fuzzy = false;
+  if (lastPage <= 1 && initial.length < 5) {
+    const expanded = await withVariants(query, initial);
+    fuzzy = expanded.length > initial.length;
+    initial = expanded;
+  }
+  add(initial);
+  let fetched = 1;
+  return {
+    movies,
+    fuzzy,
+    /** More upstream matches exist than the scan window covers. */
+    truncated: totalPages > SEARCH_SCAN_PAGES,
+    /** Upstream results in the scan window (TMDB's own count). */
+    windowSize: Math.min(totalResults, SEARCH_SCAN_PAGES * PAGE_SIZE),
+    exhausted: () => fetched >= lastPage,
+    /** Fetch the next batch of upstream pages. False when the window is exhausted. */
+    async more(): Promise<boolean> {
+      if (fetched >= lastPage) return false;
+      const from = fetched + 1;
+      const to = Math.min(lastPage, fetched + SCAN_BATCH);
+      const pages = await Promise.all(Array.from({ length: to - from + 1 }, (_, i) => searchPage(query, from + i)));
+      fetched = to;
+      for (const raw of pages) add(toMovieSummaries(raw.results));
+      return true;
+    },
+  };
+}
+
+/**
+ * Text search. Without filters or a custom sort this is a straight
+ * pass-through of TMDB pages (with spelling-tolerant variants when the first
+ * page has very few hits).
+ *
+ * With filters or a custom sort, the server scans up to SEARCH_SCAN_PAGES of
+ * TMDB matches, keeps those passing the filters (runtime and age rating are
+ * checked against each candidate's details), orders them and returns them
+ * by cursor: `start` is a position in that ordered candidate list and the
+ * response's `nextStart` continues after the last candidate checked.
+ */
+export async function searchMovies(
+  rawQuery: string,
+  filters: MovieFilters,
+  page: number,
+  start: number | null = null,
+): Promise<MoviePage> {
   const query = normalizeQuery(rawQuery);
   if (query.length < MIN_QUERY_LENGTH) {
     throw new TmdbError(400, "invalid_query", `Search needs at least ${MIN_QUERY_LENGTH} characters.`);
   }
-  const ignoredFilters = activeBrowseOnlyFilters(filters);
 
   if (!searchNeedsAggregation(filters)) {
     const raw = await searchPage(query, page);
@@ -119,38 +232,92 @@ export async function searchMovies(rawQuery: string, filters: MovieFilters, page
       totalResults: fuzzy ? Math.max(totalResults, results.length) : totalResults,
       results,
       mode: "search",
-      ignoredFilters,
       truncated: false,
       fuzzy,
     };
   }
+  return filteredSearch(query, filters, page, start ?? (page - 1) * PAGE_SIZE);
+}
 
-  const first = await searchPage(query, 1);
-  const upstreamPages = Math.min(AGGREGATE_PAGES, pageInfo(first).totalPages);
-  const rest = await Promise.all(
-    Array.from({ length: Math.max(0, upstreamPages - 1) }, (_, i) => searchPage(query, i + 2)),
-  );
-  let candidates = dedupeMovies([first, ...rest].flatMap((raw) => toMovieSummaries(raw.results)));
-  let fuzzy = false;
-  if (candidates.length < 5) {
-    const expanded = await withVariants(query, candidates);
-    fuzzy = expanded.length > candidates.length;
-    candidates = expanded;
+async function filteredSearch(query: string, filters: MovieFilters, page: number, start: number): Promise<MoviePage> {
+  const scan = await openSearchScan(query);
+  const relevance = filters.sort === "relevance";
+  const withFacts = needsMovieFacts(filters);
+  // A custom sort orders the whole scan window, so all of it is needed up
+  // front; relevance order is scanned only as far as needed.
+  if (!relevance) while (await scan.more());
+  const order = () => (relevance ? applyFilters(scan.movies, filters) : sortMovies(applyFilters(scan.movies, filters), filters.sort));
+
+  let candidates = order();
+  const results: MovieSummary[] = [];
+  const budget = { remaining: FACT_LOOKUP_BUDGET };
+  let index = start;
+  fill: while (results.length < PAGE_SIZE) {
+    if (index >= candidates.length) {
+      if (relevance && (await scan.more())) {
+        candidates = order();
+        continue;
+      }
+      break;
+    }
+    if (!withFacts) {
+      results.push(candidates[index++]);
+      continue;
+    }
+    const chunk = candidates.slice(index, index + FACT_CONCURRENCY);
+    const facts = await lookupFacts(chunk, budget);
+    for (let i = 0; i < chunk.length; i++) {
+      if (results.length >= PAGE_SIZE) break fill;
+      const found = facts[i];
+      if (found === undefined) break fill; // lookup budget spent: continue in the next request
+      index++;
+      if (found && matchesMovieFacts(found, filters)) results.push(chunk[i]);
+    }
   }
-  const filtered = applyFilters(candidates, filters);
-  const ordered = filters.sort === "relevance" ? filtered : sortMovies(filtered, filters.sort);
-  const totalPages = Math.ceil(ordered.length / PAGE_SIZE);
-  const start = (page - 1) * PAGE_SIZE;
+
+  const exhausted = index >= candidates.length && scan.exhausted();
+  const total = estimateMatches(candidates, scan, filters, withFacts);
   return {
     page,
-    totalPages,
-    totalResults: ordered.length,
-    results: ordered.slice(start, start + PAGE_SIZE),
+    totalPages: Math.max(page, Math.ceil(total.count / PAGE_SIZE)),
+    totalResults: total.count,
+    results,
     mode: "search",
-    ignoredFilters,
-    truncated: pageInfo(first).totalPages > AGGREGATE_PAGES,
-    fuzzy,
+    truncated: scan.truncated,
+    fuzzy: scan.fuzzy,
+    estimatedTotal: total.estimated,
+    nextStart: exhausted ? null : index,
   };
+}
+
+/**
+ * Number of matches over the whole scan window. Exact once every candidate
+ * has been scanned (and, for runtime / age rating, looked up); otherwise
+ * extrapolated from what is known so far.
+ */
+function estimateMatches(
+  candidates: MovieSummary[],
+  scan: { movies: MovieSummary[]; windowSize: number; exhausted: () => boolean },
+  filters: MovieFilters,
+  withFacts: boolean,
+): { count: number; estimated: boolean } {
+  // Candidates expected in the part of the window not fetched yet.
+  const unscanned = scan.exhausted()
+    ? 0
+    : Math.max(0, scan.windowSize - scan.movies.length) * (scan.movies.length ? candidates.length / scan.movies.length : 0);
+  if (!withFacts) return { count: Math.round(candidates.length + unscanned), estimated: unscanned > 0 };
+  let known = 0;
+  let matched = 0;
+  for (const m of candidates) {
+    const facts = factsCache.get(String(m.id));
+    if (facts === undefined) continue;
+    known++;
+    if (facts && matchesMovieFacts(facts, filters)) matched++;
+  }
+  const unknown = candidates.length - known + unscanned;
+  if (unknown <= 0) return { count: matched, estimated: false };
+  const rate = known ? matched / known : 0.5;
+  return { count: Math.round(matched + unknown * rate), estimated: true };
 }
 
 /** Merge results for spelling-tolerant query variants and re-rank by similarity. */

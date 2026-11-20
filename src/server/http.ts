@@ -1,8 +1,9 @@
 /**
  * Helpers shared by the /api route handlers: JSON responses, error mapping,
- * input validation, cache headers and a best-effort per-client rate limiter.
+ * input validation, cache headers and per-client rate limiting.
  */
 import { FilterValidationError } from "@/src/lib/filters";
+import { checkRateLimit } from "./rateLimit";
 import { TmdbError } from "./tmdb";
 
 export class BadRequestError extends Error {
@@ -48,6 +49,13 @@ export function parsePage(value: string | null): number {
   return page;
 }
 
+/** Optional cursor for filtered search (see MoviePage.nextStart). */
+export function parseStart(value: string | null, max: number): number | null {
+  if (value === null || value === "") return null;
+  if (!/^\d{1,6}$/.test(value) || Number(value) > max) throw new BadRequestError(`"start" must be a whole number between 0 and ${max}.`);
+  return Number(value);
+}
+
 export function parseMovieId(value: string | undefined): number {
   if (!value || !/^\d{1,9}$/.test(value) || Number(value) < 1) {
     throw new BadRequestError("Movie id must be a positive whole number.");
@@ -56,13 +64,11 @@ export function parseMovieId(value: string | undefined): number {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiting (token bucket per client IP). In serverless deployments this
-// is per instance, so it is a safety net against abuse, not a global quota;
-// CDN caching (s-maxage) absorbs most repeated traffic.
+// Rate limiting: see rateLimit.ts (per-instance bucket + optional shared
+// window across instances). CDN caching (s-maxage) absorbs most repeated
+// traffic before it reaches the API.
 // ---------------------------------------------------------------------------
-const BUCKET_CAPACITY = Number(process.env.API_RATE_LIMIT_BURST) || 120;
-const REFILL_PER_SECOND = Number(process.env.API_RATE_LIMIT_PER_SECOND) || 4;
-const buckets = new Map<string, { tokens: number; updatedAt: number }>();
+export { __resetRateLimits } from "./rateLimit";
 
 /**
  * Client address for rate limiting. Clients can put anything at the start of
@@ -81,32 +87,9 @@ export function clientKey(request: Request): string {
   return request.headers.get("x-real-ip") ?? "local";
 }
 
-export function takeToken(key: string, now = Date.now()): { ok: true } | { ok: false; retryAfter: number } {
-  const bucket = buckets.get(key) ?? { tokens: BUCKET_CAPACITY, updatedAt: now };
-  const elapsed = Math.max(0, now - bucket.updatedAt) / 1000;
-  bucket.tokens = Math.min(BUCKET_CAPACITY, bucket.tokens + elapsed * REFILL_PER_SECOND);
-  bucket.updatedAt = now;
-  if (bucket.tokens < 1) {
-    buckets.set(key, bucket);
-    return { ok: false, retryAfter: Math.ceil((1 - bucket.tokens) / REFILL_PER_SECOND) };
-  }
-  bucket.tokens -= 1;
-  buckets.set(key, bucket);
-  if (buckets.size > 10_000) {
-    // Drop the oldest half to bound memory.
-    const keys = [...buckets.keys()].slice(0, 5_000);
-    for (const k of keys) buckets.delete(k);
-  }
-  return { ok: true };
-}
-
-export function __resetRateLimits() {
-  buckets.clear();
-}
-
 /** Wrap an API handler with rate limiting and consistent error responses. */
 export async function handle(request: Request, fn: (url: URL) => Promise<Response>): Promise<Response> {
-  const limit = takeToken(clientKey(request));
+  const limit = await checkRateLimit(clientKey(request));
   if (!limit.ok) {
     return errorResponse(429, "rate_limited", "Too many requests. Please slow down.", {
       "Retry-After": String(limit.retryAfter),

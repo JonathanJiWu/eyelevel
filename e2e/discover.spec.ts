@@ -79,6 +79,48 @@ test.describe("discovery", () => {
     await expect(page).not.toHaveURL(/genres=/);
   });
 
+  test("runtime and age rating filters also apply to text search", async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.goto("/");
+    await page.getByTestId("search-input").fill("matrix");
+    await expect(card(page, "The Matrix")).toBeVisible();
+
+    // Both Matrix films run under 151 minutes.
+    await page.getByTestId("open-filters").click();
+    const sheet = page.getByTestId("filter-sheet");
+    await sheet.getByTestId("runtime-long").click();
+    await sheet.getByTestId("filters-apply").click();
+    await expect(page).toHaveURL(/runtime=long/);
+    await expect(page.getByTestId("discover-empty")).toBeVisible();
+
+    await page.getByTestId("open-filters").click();
+    await sheet.getByTestId("runtime-medium").click();
+    await sheet.getByTestId("cert-R").click();
+    await sheet.getByTestId("filters-apply").click();
+    await expect(page).toHaveURL(/certification=R/);
+    await expect(card(page, "The Matrix")).toBeVisible();
+    await expect(card(page, "The Matrix Reloaded")).toBeVisible();
+
+    // A broad query: results beyond the first page keep loading (by cursor), without duplicates.
+    await page.getByTestId("open-filters").click();
+    await sheet.getByTestId("cert-any").click();
+    await sheet.getByTestId("runtime-long").click();
+    await sheet.getByTestId("filters-apply").click();
+    await page.getByTestId("search-input").fill("the");
+    await expect(card(page, "The Godfather")).toBeVisible();
+    await expect(card(page, "The Matrix")).toHaveCount(0);
+    const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
+    await page.getByTestId("movie-grid").hover();
+    for (let i = 0; i < 20 && (await cards.count()) <= 30; i++) {
+      await page.mouse.wheel(0, 1500);
+      await page.waitForTimeout(300);
+    }
+    await expect.poll(() => cards.count()).toBeGreaterThan(30);
+    const ids = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(errors).toEqual([]);
+  });
+
   test("infinite scroll loads further pages without duplicates", async ({ page }) => {
     await page.goto("/");
     const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);

@@ -3,7 +3,7 @@
  * Every field is defensively validated: TMDB frequently omits values
  * (missing posters, empty release dates, null runtimes, etc.).
  */
-import type { CastMember, Genre, Language, MovieDetails, MovieSummary, Trailer } from "@/src/types/movies";
+import type { CastMember, Genre, Language, MovieDetails, MovieFacts, MovieSummary, Trailer } from "@/src/types/movies";
 
 type Raw = Record<string, unknown>;
 
@@ -131,6 +131,12 @@ function usCertification(releaseDates: unknown): string | null {
     if (cert) return cert;
   }
   return null;
+}
+
+/** Runtime and US age rating from a /movie/{id}?append_to_response=release_dates payload. */
+export function toMovieFacts(raw: unknown): MovieFacts {
+  if (!isObject(raw)) return { runtime: null, certification: null };
+  return { runtime: positiveInt(raw.runtime), certification: usCertification(raw.release_dates) };
 }
 
 export function toMovieDetails(raw: unknown): MovieDetails | null {

@@ -124,12 +124,12 @@ function CompareContent() {
                 {result.matchScore}% match
               </AppText>
               <AppText variant="caption">
-                {result.everyone.length} movie{result.everyone.length === 1 ? "" : "s"} on everyone's lists
+                {result.everyone.length} movie{result.everyone.length === 1 ? "" : "s"} on everyone&apos;s lists
               </AppText>
             </View>
           </View>
           {noShared.length ? (
-            <Notice>{noShared.map((f) => f.profile?.displayName ?? "A friend").join(", ")} hasn't shared any lists yet, so there's nothing to compare from them.</Notice>
+            <Notice>{noShared.map((f) => f.profile?.displayName ?? "A friend").join(", ")} hasn&apos;t shared any lists yet, so there&apos;s nothing to compare from them.</Notice>
           ) : null}
           <Segmented value={tab} onChange={setTab} options={options} testID="compare-tabs" />
           {movies.length === 0 ? (

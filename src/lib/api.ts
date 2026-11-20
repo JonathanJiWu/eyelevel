@@ -116,8 +116,9 @@ export const moviesApi = {
   discover(filters: MovieFilters, page: number, signal?: AbortSignal) {
     return apiGet<MoviePage>("/api/movies/discover", { ...filtersToParams(filters), page }, { signal });
   },
-  search(query: string, filters: MovieFilters, page: number, signal?: AbortSignal) {
-    return apiGet<MoviePage>("/api/movies/search", { q: query, ...filtersToParams(filters), page }, { signal });
+  /** `start` continues filtered results (MoviePage.nextStart). */
+  search(query: string, filters: MovieFilters, page: number, signal?: AbortSignal, start?: number) {
+    return apiGet<MoviePage>("/api/movies/search", { q: query, ...filtersToParams(filters), page, start }, { signal });
   },
   details(id: number, signal?: AbortSignal) {
     return apiGet<MovieDetails>(`/api/movie/${id}`, {}, { signal, ttl: 30 * 60 * 1000 });

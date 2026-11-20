@@ -2,8 +2,9 @@
 // /api/* routes from the Expo export (static assets come from dist/client
 // via Vercel's CDN). See DEPLOYMENT.md.
 const path = require("path");
-const { createRequestHandler } = require("@expo/server/adapter/vercel");
+const { createRequestHandler } = require("expo-server/adapter/vercel");
+const { cspResponseHook } = require("../server/csp");
 
-module.exports = createRequestHandler({
-  build: path.join(__dirname, "../dist/server"),
-});
+const build = path.join(__dirname, "../dist/server");
+
+module.exports = createRequestHandler({ build }, { beforeResponse: cspResponseHook(build) });

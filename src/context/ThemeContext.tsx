@@ -28,13 +28,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    if (Platform.OS === "web" && typeof document !== "undefined") document.documentElement.dataset.hydrated = "true";
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (stored === "light" || stored === "dark" || stored === "system") setModeState(stored);
       })
       .catch(() => undefined);
   }, []);
+
+  // Marks the page as interactive once the post-hydration render (real window
+  // size, theme) has been committed. Tests wait for this attribute.
+  useEffect(() => {
+    if (mounted && Platform.OS === "web" && typeof document !== "undefined") document.documentElement.dataset.hydrated = "true";
+  }, [mounted]);
 
   const setMode = useCallback((next: ThemeMode) => {
     setModeState(next);

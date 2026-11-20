@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View, type TextInput } from "react-native";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View, type TextInputInstance } from "react-native";
 import { ActiveFilters } from "@/src/components/movies/ActiveFilters";
 import { FilterSheet } from "@/src/components/movies/FilterSheet";
 import { MovieCard } from "@/src/components/movies/MovieCard";
@@ -21,7 +21,7 @@ import { useResponsive } from "@/src/hooks/useResponsive";
 import { participantFromSharedIndex, popularAmongFriends } from "@/src/lib/compare";
 import { countActiveFilters, defaultFilters, filtersToParams, hasActiveCriteria, parseFilters, sameFilters, type MovieFilters } from "@/src/lib/filters";
 import { cleanSearchParams } from "@/src/lib/params";
-import { MIN_QUERY_LENGTH } from "@/src/lib/search";
+import { MIN_QUERY_LENGTH, SEARCH_SCAN_RESULTS } from "@/src/lib/search";
 import { radius, spacing } from "@/src/theme/colors";
 import { shadow } from "@/src/theme/shadow";
 import type { MovieSummary } from "@/src/types/movies";
@@ -50,7 +50,7 @@ export default function DiscoverScreen() {
   const [filters, setFilters] = useState<MovieFilters>(defaultFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [focused, setFocused] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const searching = query.trim().length >= MIN_QUERY_LENGTH;
   const feed = useMovieFeed(query, filters);
 
@@ -62,7 +62,9 @@ export default function DiscoverScreen() {
 
   // Two-way sync with the URL (shareable searches, refresh, back/forward).
   const current = useRef({ query, filters });
-  current.current = { query, filters };
+  useLayoutEffect(() => {
+    current.current = { query, filters };
+  });
   const lastUrlKey = useRef<string | null>(null);
   const skipNextUrlWrite = useRef(false);
   const urlKey = paramsKey(params);
@@ -131,16 +133,16 @@ export default function DiscoverScreen() {
         </AppText>
         {feed.status === "ready" && feed.totalResults > 0 ? (
           <AppText variant="muted" testID="result-count">
+            {feed.meta?.estimatedTotal ? "About " : ""}
             {feed.totalResults.toLocaleString()} {feed.totalResults === 1 ? "movie" : "movies"}
           </AppText>
         ) : null}
       </View>
       {feed.meta?.fuzzy ? <Notice>Few exact matches for “{query.trim()}”, so we included close spellings.</Notice> : null}
-      {searching && feed.meta?.ignoredFilters.length ? (
-        <Notice tone="warning">Runtime and age rating filters don't apply to text search. Clear the search box to use them.</Notice>
-      ) : null}
       {feed.meta?.truncated && feed.meta.mode === "search" ? (
-        <AppText variant="caption">Filtering the 100 best matches for this search. Try a more specific title for more.</AppText>
+        <AppText variant="caption" testID="search-truncated">
+          Filtering the {SEARCH_SCAN_RESULTS.toLocaleString()} best matches for this search. Try a more specific title for more.
+        </AppText>
       ) : null}
     </View>
   );
@@ -169,7 +171,7 @@ export default function DiscoverScreen() {
     );
 
   const footer =
-    feed.movies.length === 0 ? null : feed.loadingMore ? (
+    feed.movies.length === 0 ? undefined : feed.loadingMore ? (
       <View style={styles.footer}>
         <ActivityIndicator color={colors.primary} />
       </View>
@@ -181,7 +183,7 @@ export default function DiscoverScreen() {
     ) : !feed.hasMore ? (
       <View style={styles.footer}>
         <AppText variant="caption" testID="end-of-results">
-          You've reached the end.
+          You&apos;ve reached the end.
         </AppText>
       </View>
     ) : (
@@ -193,7 +195,11 @@ export default function DiscoverScreen() {
   // Tall screens: if the loaded movies don't fill the viewport there is
   // nothing to scroll, so keep loading pages until they do.
   const [listHeight, setListHeight] = useState(0);
-  const [contentHeight, setContentHeight] = useState(0);
+  // Content height together with the number of movies it was measured for:
+  // a measurement of the loading skeleton (or of fewer movies) must not
+  // trigger loading another page.
+  const [content, setContent] = useState({ height: 0, count: -1 });
+  const contentHeight = content.count === feed.movies.length ? content.height : 0;
   useEffect(() => {
     if (feed.status !== "ready" || !feed.hasMore || feed.loadingMore || feed.loadMoreError) return;
     if (listHeight > 0 && contentHeight > 0 && contentHeight < listHeight + 200) feed.loadMore();
@@ -281,13 +287,13 @@ export default function DiscoverScreen() {
         }}
         scrollEventThrottle={100}
         onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
-        onContentSizeChange={(_w, h) => setContentHeight(h)}
+        onContentSizeChange={(_w, h) => setContent({ height: h, count: feed.movies.length })}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={numColumns * 4}
         windowSize={7}
         removeClippedSubviews={false}
       />
-      <FilterSheet visible={filtersOpen} filters={filters} searching={searching} onApply={setFilters} onClose={() => setFiltersOpen(false)} />
+      <FilterSheet visible={filtersOpen} filters={filters} onApply={setFilters} onClose={() => setFiltersOpen(false)} />
     </View>
   );
 }

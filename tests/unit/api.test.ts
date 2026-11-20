@@ -11,6 +11,7 @@ import { GET as detailsRoute } from "@/app/api/movie/[id]+api";
 import { GET as discoverRoute } from "@/app/api/movies/discover+api";
 import { GET as searchRoute } from "@/app/api/movies/search+api";
 import { __resetRateLimits } from "@/src/server/http";
+import { __resetMovieCaches, FACT_LOOKUP_BUDGET } from "@/src/server/movies";
 import { __tmdbInternals } from "@/src/server/tmdb";
 import type { MovieDetails, MoviePage } from "@/src/types/movies";
 
@@ -37,9 +38,47 @@ beforeEach(async () => {
   delete process.env.TMDB_READ_ACCESS_TOKEN;
   process.env.TMDB_MAX_RETRIES = "2";
   __tmdbInternals.clear();
+  __resetMovieCaches();
   __resetRateLimits();
   await fetch(`${base}/__reset`);
 });
+
+/** Number of per-movie details requests the mock TMDB has served since the last reset. */
+const detailLookups = async () =>
+  Object.entries((await stats()).byPath)
+    .filter(([path]) => /^\/3\/movie\/\d+$/.test(path))
+    .reduce((n, [, count]) => n + count, 0);
+
+/** Follow a filtered search's cursor to the end. */
+async function collectSearch(path: string) {
+  const results: MoviePage["results"] = [];
+  let start: number | null | undefined = 0;
+  let requests = 0;
+  let last: MoviePage;
+  do {
+    const res = await searchRoute(req(`${path}&start=${start}`));
+    expect(res.status).toBe(200);
+    last = await json<MoviePage>(res);
+    results.push(...last.results);
+    start = last.nextStart;
+    requests++;
+  } while (start != null && requests < 40);
+  return { results, requests, last };
+}
+
+/** Every mock TMDB search result for a query, straight from the mock (all pages). */
+async function upstreamSearch(query: string) {
+  const all: { id: number; genre_ids: number[] }[] = [];
+  for (let page = 1; ; page++) {
+    const body = (await (await fetch(`${base}/3/search/movie?api_key=test-key&query=${query}&page=${page}`)).json()) as {
+      results: { id: number; genre_ids: number[] }[];
+      total_pages: number;
+    };
+    all.push(...body.results);
+    if (page >= body.total_pages) break;
+  }
+  return all;
+}
 
 describe("GET /api/movies/discover", () => {
   it("returns normalized, paginated movies", async () => {
@@ -124,10 +163,57 @@ describe("GET /api/movies/search", () => {
     expect([...dates].sort().reverse()).toEqual(dates);
   });
 
-  it("reports browse-only filters as ignored during text search", async () => {
-    const body = await json<MoviePage>(await searchRoute(req("/api/movies/search?q=matrix&runtime=short&certification=R")));
-    expect(body.ignoredFilters).toEqual(["runtime", "certification"]);
-    expect(body.results.map((m) => m.title)).toContain("The Matrix");
+  it("applies age rating and runtime filters to text search", async () => {
+    const r = await json<MoviePage>(await searchRoute(req("/api/movies/search?q=matrix&certification=R")));
+    expect(r.results.map((m) => m.title)).toEqual(expect.arrayContaining(["The Matrix", "The Matrix Reloaded"]));
+    const g = await json<MoviePage>(await searchRoute(req("/api/movies/search?q=matrix&certification=G")));
+    expect(g.results).toEqual([]);
+    expect(g.nextStart).toBeNull();
+    expect(g.totalResults).toBe(0);
+
+    const { results } = await collectSearch("/api/movies/search?q=the&runtime=long");
+    expect(results.length).toBeGreaterThan(20);
+    expect(new Set(results.map((m) => m.id)).size).toBe(results.length);
+    for (const m of results) {
+      const details = (await (await fetch(`${base}/3/movie/${m.id}?api_key=test-key`)).json()) as { runtime: number };
+      expect(details.runtime).toBeGreaterThan(150);
+    }
+  });
+
+  it("filters and sorts well beyond the top 100 search matches", async () => {
+    const upstream = await upstreamSearch("the");
+    expect(upstream.length).toBeGreaterThan(100);
+    const expected = upstream.filter((m) => m.genre_ids.includes(878)).map((m) => m.id);
+    const { results, last } = await collectSearch("/api/movies/search?q=the&genres=878");
+    expect(results.map((m) => m.id).sort()).toEqual([...expected].sort());
+    expect(last.truncated).toBe(false);
+    expect(last.estimatedTotal).toBe(false);
+    expect(last.totalResults).toBe(expected.length);
+
+    const sorted = await collectSearch("/api/movies/search?q=the&runtime=long&sort=rating");
+    const ratings = sorted.results.map((m) => m.voteAverage);
+    expect(ratings).toEqual([...ratings].sort((a, b) => b - a));
+  });
+
+  it("caps uncached detail lookups per request and continues by cursor on a cold server", async () => {
+    const first = await json<MoviePage>(await searchRoute(req("/api/movies/search?q=the&runtime=long")));
+    expect(await detailLookups()).toBeLessThanOrEqual(FACT_LOOKUP_BUDGET);
+    expect(first.nextStart).toEqual(expect.any(Number));
+    expect(first.estimatedTotal).toBe(true);
+    expect(first.totalResults).toBeGreaterThan(0);
+
+    // Another server instance: nothing cached, the cursor still makes progress.
+    __tmdbInternals.clear();
+    __resetMovieCaches();
+    await fetch(`${base}/__reset`);
+    const second = await json<MoviePage>(await searchRoute(req(`/api/movies/search?q=the&runtime=long&start=${first.nextStart}`)));
+    expect(await detailLookups()).toBeLessThanOrEqual(FACT_LOOKUP_BUDGET);
+    expect(second.nextStart === null || second.nextStart! > first.nextStart!).toBe(true);
+    const seen = new Set(first.results.map((m) => m.id));
+    expect(second.results.filter((m) => seen.has(m.id))).toEqual([]);
+
+    expect((await searchRoute(req("/api/movies/search?q=the&runtime=long&start=abc"))).status).toBe(400);
+    expect((await searchRoute(req("/api/movies/search?q=the&runtime=long&start=999999"))).status).toBe(400);
   });
 
   it("returns an empty page (not an error) when nothing matches", async () => {

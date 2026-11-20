@@ -91,6 +91,9 @@ async function main() {
     });
     if (build.status !== 0) throw new Error("Web build failed");
   }
+  // The CSP is derived from the public config (emulator and mock image origins here).
+  const csp = spawnSync("node", ["server/csp.js", "--write", "dist-e2e"], { cwd: ROOT, env: { ...process.env, ...publicEnv }, stdio: "inherit" });
+  if (csp.status !== 0) throw new Error("Writing the CSP failed");
 
   const isUp = async (url) => {
     try {

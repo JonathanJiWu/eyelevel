@@ -5,7 +5,6 @@ export const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 /** Collapse whitespace and strip control characters from free text. */
 export function sanitizeText(value: string, maxLength: number): string {
   return value
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -15,7 +14,6 @@ export function sanitizeText(value: string, maxLength: number): string {
 /** Like sanitizeText but keeps single newlines (for bios/descriptions). */
 export function sanitizeMultiline(value: string, maxLength: number): string {
   return value
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")

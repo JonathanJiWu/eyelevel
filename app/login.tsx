@@ -54,7 +54,7 @@ export default function LoginScreen() {
 
   return (
     <AuthLayout title="Welcome back" subtitle="Sign in to see your watchlists and friends.">
-      {!configured ? <Notice tone="danger">Sign-in isn't available: this deployment is missing its Firebase configuration.</Notice> : null}
+      {!configured ? <Notice tone="danger">Sign-in isn&apos;t available: this deployment is missing its Firebase configuration.</Notice> : null}
       <TextField
         label="Email"
         value={email}

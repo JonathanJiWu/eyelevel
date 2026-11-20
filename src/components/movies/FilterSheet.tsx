@@ -34,7 +34,6 @@ function Section({ title, children, hint }: { title: string; children: React.Rea
 interface FilterSheetProps {
   visible: boolean;
   filters: MovieFilters;
-  searching: boolean;
   onApply: (filters: MovieFilters) => void;
   onClose: () => void;
 }
@@ -44,7 +43,7 @@ export function FilterSheet(props: FilterSheetProps) {
   return props.visible ? <FilterForm {...props} /> : null;
 }
 
-function FilterForm({ filters, searching, onApply, onClose }: FilterSheetProps) {
+function FilterForm({ filters, onApply, onClose }: FilterSheetProps) {
   const { genres, languages } = useReferenceData();
   const [draft, setDraft] = useState<MovieFilters>(filters);
   const [yearFrom, setYearFrom] = useState(filters.yearFrom?.toString() ?? "");
@@ -220,23 +219,19 @@ function FilterForm({ filters, searching, onApply, onClose }: FilterSheetProps) 
         ) : null}
       </Section>
 
-      {searching ? (
-        <Notice>Runtime and age rating apply when browsing. They are ignored while a search term is entered.</Notice>
-      ) : null}
-
       <Section title="Runtime">
         <ChipRow>
           {RUNTIME_OPTIONS.map((r) => (
-            <Chip key={r.key} label={r.label} selected={draft.runtime === r.key} disabled={searching} onPress={() => set({ runtime: r.key })} testID={`runtime-${r.key}`} />
+            <Chip key={r.key} label={r.label} selected={draft.runtime === r.key} onPress={() => set({ runtime: r.key })} testID={`runtime-${r.key}`} />
           ))}
         </ChipRow>
       </Section>
 
       <Section title="Age rating (US)">
         <ChipRow>
-          <Chip label="Any" selected={draft.certification === null} disabled={searching} onPress={() => set({ certification: null })} />
+          <Chip label="Any" selected={draft.certification === null} onPress={() => set({ certification: null })} testID="cert-any" />
           {CERTIFICATIONS.map((c) => (
-            <Chip key={c} label={c} selected={draft.certification === c} disabled={searching} onPress={() => set({ certification: c })} testID={`cert-${c}`} />
+            <Chip key={c} label={c} selected={draft.certification === c} onPress={() => set({ certification: c })} testID={`cert-${c}`} />
           ))}
         </ChipRow>
       </Section>

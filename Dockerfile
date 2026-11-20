@@ -20,14 +20,15 @@ ARG EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 ARG EXPO_PUBLIC_FIREBASE_APP_ID
 ARG EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN
 ENV CI=1
-RUN npx expo export -p web
+# Exports the web app and writes its Content-Security-Policy (server/csp.js).
+RUN npm run build:web
 
 FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
 # The exported server bundles are self-contained; the runtime only needs the
 # HTTP server and the Expo request handler.
-RUN npm init -y >/dev/null && npm install --no-audit --no-fund express@4.22.3 compression@1.8.1 @expo/server@0.5.3
+RUN npm init -y >/dev/null && npm install --no-audit --no-fund express@4.22.3 compression@1.8.1 expo-server@58.1.0
 COPY --from=build /app/dist ./dist
 COPY server ./server
 USER node

@@ -10,6 +10,11 @@ dist-*/
 web-build/
 expo-env.d.ts
 
+# Native projects are generated from app.json (Continuous Native Generation):
+# `npx expo prebuild`, `npx expo run:android|ios` and EAS Build create them.
+/android
+/ios
+
 # Native
 *.orig.*
 *.jks

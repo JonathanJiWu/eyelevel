@@ -1,10 +1,11 @@
 import {
-  activeBrowseOnlyFilters,
   countActiveFilters,
   defaultFilters,
   FilterValidationError,
   filtersToParams,
   hasActiveCriteria,
+  matchesMovieFacts,
+  needsMovieFacts,
   parseFilters,
   sameFilters,
   searchNeedsAggregation,
@@ -92,9 +93,30 @@ describe("filter state helpers", () => {
     expect(searchNeedsAggregation(defaultFilters())).toBe(false);
     expect(searchNeedsAggregation({ ...defaultFilters(), genres: [18] })).toBe(true);
     expect(searchNeedsAggregation({ ...defaultFilters(), sort: "title" })).toBe(true);
-    // Browse-only filters never trigger aggregation; they are reported as ignored instead.
-    expect(searchNeedsAggregation({ ...defaultFilters(), runtime: "short", certification: "R" })).toBe(false);
-    expect(activeBrowseOnlyFilters({ ...defaultFilters(), runtime: "short", certification: "R" })).toEqual(["runtime", "certification"]);
+    // Runtime and age rating also apply to text search (checked per movie).
+    expect(searchNeedsAggregation({ ...defaultFilters(), runtime: "short" })).toBe(true);
+    expect(searchNeedsAggregation({ ...defaultFilters(), certification: "R" })).toBe(true);
+    expect(needsMovieFacts({ ...defaultFilters(), genres: [18], sort: "rating" })).toBe(false);
+    expect(needsMovieFacts({ ...defaultFilters(), runtime: "long" })).toBe(true);
+    expect(needsMovieFacts({ ...defaultFilters(), certification: "PG" })).toBe(true);
+  });
+
+  it("matches runtime buckets and age ratings; unknown values never match", () => {
+    const f = (patch: Partial<ReturnType<typeof defaultFilters>>) => ({ ...defaultFilters(), ...patch });
+    const movie = (runtime: number | null, certification: string | null = null) => ({ runtime, certification });
+    expect(matchesMovieFacts(movie(89), f({ runtime: "short" }))).toBe(true);
+    expect(matchesMovieFacts(movie(90), f({ runtime: "short" }))).toBe(false);
+    expect(matchesMovieFacts(movie(90), f({ runtime: "medium" }))).toBe(true);
+    expect(matchesMovieFacts(movie(150), f({ runtime: "medium" }))).toBe(true);
+    expect(matchesMovieFacts(movie(151), f({ runtime: "medium" }))).toBe(false);
+    expect(matchesMovieFacts(movie(151), f({ runtime: "long" }))).toBe(true);
+    expect(matchesMovieFacts(movie(null), f({ runtime: "long" }))).toBe(false);
+    expect(matchesMovieFacts(movie(null), f({}))).toBe(true);
+    expect(matchesMovieFacts(movie(120, "PG-13"), f({ certification: "PG-13" }))).toBe(true);
+    expect(matchesMovieFacts(movie(120, "PG"), f({ certification: "PG-13" }))).toBe(false);
+    expect(matchesMovieFacts(movie(120, null), f({ certification: "R" }))).toBe(false);
+    expect(matchesMovieFacts(movie(160, "R"), f({ runtime: "long", certification: "R" }))).toBe(true);
+    expect(matchesMovieFacts(movie(100, "R"), f({ runtime: "long", certification: "R" }))).toBe(false);
   });
 });
 

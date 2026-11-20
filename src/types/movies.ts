@@ -61,6 +61,12 @@ export interface MovieDetails extends MovieSummary {
   recommendations: MovieSummary[];
 }
 
+/** Runtime (minutes) and US age rating, used to filter text search results. */
+export interface MovieFacts {
+  runtime: number | null;
+  certification: string | null;
+}
+
 export interface MoviePage {
   page: number;
   totalPages: number;
@@ -68,12 +74,18 @@ export interface MoviePage {
   results: MovieSummary[];
   /** "search" when a text query was used, otherwise "discover". */
   mode: "search" | "discover";
-  /** Filters that could not be applied in this mode (e.g. runtime during text search). */
-  ignoredFilters: string[];
   /** True when results come from a capped window of upstream results. */
   truncated: boolean;
   /** Set when the original query had few matches and spelling-tolerant variants were used. */
   fuzzy: boolean;
+  /** True when totalResults is an estimate (not every candidate has been checked yet). */
+  estimatedTotal?: boolean;
+  /**
+   * Filtered text search pages by cursor instead of page number: pass this
+   * value as `start` to continue, or stop when it is null. A page can hold
+   * fewer than 20 results while more remain. Absent for page-numbered results.
+   */
+  nextStart?: number | null;
 }
 
 export interface ApiErrorBody {

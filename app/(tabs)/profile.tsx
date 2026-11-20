@@ -561,7 +561,7 @@ function DeleteAccountForm({ usesPassword, onClose }: { usesPassword: boolean; o
         </>
       }
     >
-      <Notice tone="danger">This permanently deletes your profile, watchlists, ratings, friendships and activity. It can't be undone.</Notice>
+      <Notice tone="danger">This permanently deletes your profile, watchlists, ratings, friendships and activity. It can&apos;t be undone.</Notice>
       {usesPassword ? <TextField label="Password" value={password} onChangeText={setPassword} password testID="delete-password" /> : null}
       <TextField label='Type "DELETE" to confirm' value={confirmText} onChangeText={setConfirmText} autoCapitalize="characters" testID="delete-confirm-text" />
       {error ? <Notice tone="danger">{error}</Notice> : null}

@@ -147,7 +147,7 @@ function FindPeople() {
         {error ? <Notice tone="danger">{error}</Notice> : null}
         {!loading && query.replace(/^@/, "").length >= 2 && results.length === 0 && !error ? (
           <AppText variant="muted" testID="people-no-results">
-            No one found for “{query}”. People who turned off discoverability won't appear.
+            No one found for “{query}”. People who turned off discoverability won&apos;t appear.
           </AppText>
         ) : null}
         <View style={{ gap: spacing.sm }} testID="people-results">

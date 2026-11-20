@@ -1,6 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { forwardRef, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
+import { Pressable, StyleSheet, TextInput, View, type TextInputInstance, type TextInputProps } from "react-native";
 import { useTheme } from "@/src/context/ThemeContext";
 import { radius } from "@/src/theme/colors";
 import { AppText } from "./AppText";
@@ -16,7 +16,7 @@ export interface TextFieldProps extends TextInputProps {
   password?: boolean;
 }
 
-export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+export const TextField = forwardRef<TextInputInstance, TextFieldProps>(function TextField(
   { label, error, helper, icon, onClear, password, style, multiline, editable = true, ...rest },
   ref,
 ) {

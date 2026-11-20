@@ -27,10 +27,13 @@ for (const vp of VIEWPORTS) {
     // Columns adapt to the width.
     const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
     await expect(cards.first()).toBeVisible();
-    const tops = await cards.evaluateAll((els) => els.slice(0, 12).map((e) => Math.round(e.getBoundingClientRect().top)));
-    const perRow = tops.filter((t) => t === tops[0]).length;
-    if (vp.name === "phone") expect(perRow).toBe(2);
-    if (vp.name === "desktop") expect(perRow).toBeGreaterThanOrEqual(6);
+    const perRow = () =>
+      cards.evaluateAll((els) => {
+        const tops = els.slice(0, 12).map((e) => Math.round(e.getBoundingClientRect().top));
+        return tops.filter((t) => t === tops[0]).length;
+      });
+    if (vp.name === "phone") await expect.poll(perRow).toBe(2);
+    if (vp.name === "desktop") await expect.poll(perRow).toBeGreaterThanOrEqual(6);
     await context.close();
   });
 }

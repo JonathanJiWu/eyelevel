@@ -1,12 +1,19 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
-import { PlatformPressable } from "@react-navigation/elements";
-import { Tabs } from "expo-router";
+import { Tabs } from "expo-router/tabs";
 import React from "react";
+import type { ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabHeader } from "@/src/components/AppChrome";
+import { TabBarButton } from "@/src/components/TabBarButton";
 import { useSocial } from "@/src/context/SocialContext";
 import { useTheme } from "@/src/context/ThemeContext";
+
+type IconName = React.ComponentProps<typeof MaterialIcons>["name"];
+
+function TabIcon({ name, color, size }: { name: IconName; color: ColorValue; size: number }) {
+  // The tab bar passes the tint colors set below (always strings).
+  return <MaterialIcons name={name} size={size} color={typeof color === "number" || color == null ? undefined : color} />;
+}
 
 export default function TabLayout() {
   const { colors } = useTheme();
@@ -33,7 +40,7 @@ export default function TabLayout() {
         tabBarLabelPosition: "below-icon",
         // Tab links point at the tab itself, without the current query string,
         // so statically rendered HTML and the browser agree on the href.
-        tabBarButton: (props: BottomTabBarButtonProps) => <PlatformPressable {...props} href={props.href?.split("?")[0]} />,
+        tabBarButton: (props) => <TabBarButton {...props} />,
       }}
     >
       <Tabs.Screen
@@ -41,7 +48,7 @@ export default function TabLayout() {
         options={{
           title: "Discover",
           tabBarButtonTestID: "tab-discover",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <MaterialIcons name="explore" size={size} color={color} />,
+          tabBarIcon: (props) => <TabIcon name="explore" {...props} />,
         }}
       />
       <Tabs.Screen
@@ -49,7 +56,7 @@ export default function TabLayout() {
         options={{
           title: "My Lists",
           tabBarButtonTestID: "tab-lists",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <MaterialIcons name="movie" size={size} color={color} />,
+          tabBarIcon: (props) => <TabIcon name="movie" {...props} />,
         }}
       />
       <Tabs.Screen
@@ -57,7 +64,7 @@ export default function TabLayout() {
         options={{
           title: "Friends",
           tabBarButtonTestID: "tab-friends",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <MaterialIcons name="group" size={size} color={color} />,
+          tabBarIcon: (props) => <TabIcon name="group" {...props} />,
           tabBarBadge: pending > 0 ? pending : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.danger, color: "#FFFFFF", fontWeight: "700" },
           tabBarAccessibilityLabel: pending > 0 ? `Friends, ${pending} pending friend request${pending === 1 ? "" : "s"}` : "Friends",
@@ -68,7 +75,7 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           tabBarButtonTestID: "tab-profile",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => <MaterialIcons name="person" size={size} color={color} />,
+          tabBarIcon: (props) => <TabIcon name="person" {...props} />,
         }}
       />
     </Tabs>

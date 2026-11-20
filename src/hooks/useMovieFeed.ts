@@ -2,6 +2,11 @@
  * Paginated movie feed for Discover: text search or filtered browsing.
  * Cancels stale requests when inputs change, de-duplicates movies across
  * pages and exposes loading / error / end-of-results state.
+ *
+ * Most results are page-numbered. Filtered text search is paged by cursor
+ * (MoviePage.nextStart) and a response can hold few or no movies while more
+ * remain (the server checks runtime / age rating within a lookup budget), so
+ * the feed keeps requesting until it has something new to show.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { moviesApi } from "@/src/lib/api";
@@ -18,9 +23,22 @@ export interface MovieFeed {
   loadMoreError: string | null;
   hasMore: boolean;
   totalResults: number;
-  meta: Pick<MoviePage, "mode" | "ignoredFilters" | "truncated" | "fuzzy"> | null;
+  meta: Pick<MoviePage, "mode" | "truncated" | "fuzzy" | "estimatedTotal"> | null;
   loadMore: () => void;
   retry: () => void;
+}
+
+/** What to request next: a page number, plus a cursor for filtered search. */
+type NextRequest = { page: number; start?: number };
+
+/** Cursor responses requested in a row while they bring nothing new. */
+const MAX_EMPTY_FOLLOW_UPS = 12;
+
+function nextAfter(result: MoviePage, request: NextRequest): NextRequest | null {
+  if (result.nextStart !== undefined) {
+    return result.nextStart === null ? null : { page: request.page + 1, start: result.nextStart };
+  }
+  return result.page < result.totalPages ? { page: result.page + 1 } : null;
 }
 
 export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
@@ -29,8 +47,7 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const [next, setNext] = useState<NextRequest | null>(null);
   const [totalResults, setTotalResults] = useState(0);
   const [meta, setMeta] = useState<MovieFeed["meta"]>(null);
   const [attempt, setAttempt] = useState(0);
@@ -44,9 +61,25 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
   const searching = trimmed.length >= MIN_QUERY_LENGTH;
   const key = JSON.stringify({ q: searching ? trimmed : "", filters });
 
-  const fetchPage = useCallback(
-    (pageNumber: number, signal: AbortSignal) =>
-      searching ? moviesApi.search(trimmed, filters, pageNumber, signal) : moviesApi.discover(filters, pageNumber, signal),
+  /**
+   * Fetch `request` and return the movies not shown yet. Cursor responses
+   * that bring nothing new are followed up (each one advances the cursor).
+   */
+  const fetchFresh = useCallback(
+    async (request: NextRequest, signal: AbortSignal) => {
+      let current: NextRequest | null = request;
+      let result: MoviePage;
+      let fresh: MovieSummary[] = [];
+      let followUps = 0;
+      do {
+        result = searching
+          ? await moviesApi.search(trimmed, filters, current.page, signal, current.start)
+          : await moviesApi.discover(filters, current.page, signal);
+        fresh = result.results.filter((m) => !seen.current.has(m.id));
+        current = nextAfter(result, current);
+      } while (!fresh.length && current?.start !== undefined && ++followUps <= MAX_EMPTY_FOLLOW_UPS && !signal.aborted);
+      return { result, fresh, next: current };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key],
   );
@@ -63,17 +96,15 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
     setLoadingMore(false);
     loadingRef.current = false;
     setMovies([]);
-    setPage(0);
-    fetchPage(1, ac.signal)
-      .then((result) => {
+    setNext(null);
+    fetchFresh({ page: 1 }, ac.signal)
+      .then(({ result, fresh, next: following }) => {
         if (ac.signal.aborted) return;
-        const fresh = result.results.filter((m) => !seen.current.has(m.id));
         fresh.forEach((m) => seen.current.add(m.id));
         setMovies(fresh);
-        setPage(1);
-        setTotalPages(result.totalPages);
+        setNext(following);
         setTotalResults(result.totalResults);
-        setMeta({ mode: result.mode, ignoredFilters: result.ignoredFilters, truncated: result.truncated, fuzzy: result.fuzzy });
+        setMeta({ mode: result.mode, truncated: result.truncated, fuzzy: result.fuzzy, estimatedTotal: result.estimatedTotal });
         setStatus("ready");
       })
       .catch((e) => {
@@ -82,25 +113,25 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
         setStatus("error");
       });
     return () => ac.abort();
-  }, [fetchPage, attempt]);
+  }, [fetchFresh, attempt]);
 
-  const hasMore = status === "ready" && page < totalPages;
+  const hasMore = status === "ready" && next !== null;
 
   const loadMore = useCallback(() => {
-    if (!hasMore || loadingMore || loadingRef.current || !controller.current) return;
+    if (!hasMore || !next || loadingMore || loadingRef.current || !controller.current) return;
     const signal = controller.current.signal;
-    const next = page + 1;
     loadingRef.current = true;
     setLoadingMore(true);
     setLoadMoreError(null);
-    fetchPage(next, signal)
-      .then((result) => {
+    fetchFresh(next, signal)
+      .then(({ result, fresh, next: following }) => {
         if (signal.aborted) return;
-        const fresh = result.results.filter((m) => !seen.current.has(m.id));
         fresh.forEach((m) => seen.current.add(m.id));
         setMovies((current) => [...current, ...fresh]);
-        setPage(next);
-        setTotalPages(result.totalPages);
+        setNext(following);
+        // Filtered search estimates get more precise as results are checked.
+        setTotalResults(result.totalResults);
+        setMeta((current) => (current ? { ...current, estimatedTotal: result.estimatedTotal } : current));
       })
       .catch((e) => {
         if (signal.aborted || e?.name === "AbortError") return;
@@ -111,7 +142,7 @@ export function useMovieFeed(query: string, filters: MovieFilters): MovieFeed {
         loadingRef.current = false;
         setLoadingMore(false);
       });
-  }, [hasMore, loadingMore, page, fetchPage]);
+  }, [hasMore, next, loadingMore, fetchFresh]);
 
   const retry = useCallback(() => {
     if (status === "error") setAttempt((n) => n + 1);

@@ -39,3 +39,8 @@ export const tmdbImageBaseUrl = (process.env.EXPO_PUBLIC_TMDB_IMAGE_BASE_URL || 
 );
 
 export const googleSignInEnabled = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_SIGN_IN === "true";
+
+/** reCAPTCHA v3 site key for Firebase App Check on web (optional). */
+export const appCheckSiteKey = process.env.EXPO_PUBLIC_FIREBASE_APPCHECK_SITE_KEY ?? "";
+/** App Check debug token for local development builds (never set in production). */
+export const appCheckDebugToken = process.env.EXPO_PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN ?? "";

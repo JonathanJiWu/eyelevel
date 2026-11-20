@@ -19,7 +19,7 @@ export interface MovieFilters {
   /** ISO 639-1 original language code. */
   language: string | null;
   runtime: RuntimeBucket;
-  /** US age rating (certification), e.g. "PG-13". Browse mode only. */
+  /** US age rating (certification), e.g. "PG-13". */
   certification: string | null;
   sort: SortKey;
 }
@@ -73,9 +73,6 @@ export const DEFAULT_FILTERS: MovieFilters = Object.freeze({
 export function defaultFilters(): MovieFilters {
   return { ...DEFAULT_FILTERS, genres: [] };
 }
-
-/** Filters that only work when browsing (TMDB discover), not with a text query. */
-export const BROWSE_ONLY_FILTERS = ["runtime", "certification"] as const;
 
 const SORT_KEYS = new Set<SortKey>(SORT_OPTIONS.map((o) => o.key));
 const RUNTIME_KEYS = new Set<RuntimeBucket>(RUNTIME_OPTIONS.map((o) => o.key));
@@ -296,7 +293,7 @@ export function toTmdbDiscoverParams(filters: MovieFilters, page: number): Recor
 
 /**
  * TMDB's search endpoint cannot filter or sort, so when a text query is
- * combined with filters or a non-default sort the server aggregates the top
+ * combined with filters or a non-default sort the server scans the top
  * search results and filters/sorts them itself.
  */
 export function searchNeedsAggregation(filters: MovieFilters): boolean {
@@ -307,14 +304,27 @@ export function searchNeedsAggregation(filters: MovieFilters): boolean {
     filters.ratingMin !== null ||
     filters.votesMin !== null ||
     filters.language !== null ||
+    needsMovieFacts(filters) ||
     filters.sort !== "relevance"
   );
 }
 
-/** Browse-only filters that are currently set (they are ignored during text search). */
-export function activeBrowseOnlyFilters(filters: MovieFilters): string[] {
-  const active: string[] = [];
-  if (filters.runtime !== "any") active.push("runtime");
-  if (filters.certification) active.push("certification");
-  return active;
+/**
+ * Runtime and age rating are not part of TMDB search results: during text
+ * search these filters need each candidate's details.
+ */
+export function needsMovieFacts(filters: MovieFilters): boolean {
+  return filters.runtime !== "any" || filters.certification !== null;
+}
+
+/** Whether a movie's runtime (minutes) and US age rating pass the filters. Unknown values never match. */
+export function matchesMovieFacts(facts: { runtime: number | null; certification: string | null }, filters: MovieFilters): boolean {
+  if (filters.runtime !== "any") {
+    const range = RUNTIME_OPTIONS.find((r) => r.key === filters.runtime);
+    if (facts.runtime === null) return false;
+    if (range?.min !== undefined && facts.runtime < range.min) return false;
+    if (range?.max !== undefined && facts.runtime > range.max) return false;
+  }
+  if (filters.certification !== null && facts.certification !== filters.certification) return false;
+  return true;
 }

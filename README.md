@@ -8,7 +8,7 @@ eyelevel is a React Native + web app (Expo Router) backed by Firebase and the TM
 
 - **Accounts** — email/password registration and sign-in, persistent sessions, password reset by email, email verification, change password, delete account (removes all data). Optional Google sign-in on the web.
 - **Profiles** — display name, unique `@username`, bio, avatar color, favorite genres and preferred language.
-- **Discover** — popular movies, fast search (debounced, partial titles, typo tolerant: *"interstelar"* finds *Interstellar*), infinite scroll, and filters that combine: genres (any/all), release years, TMDB score, popularity (vote count), original language, runtime, US age rating, and sorting. Filters live in the URL, so results survive reloads and can be shared.
+- **Discover** — popular movies, fast search (debounced, partial titles, typo tolerant: *"interstelar"* finds *Interstellar*), infinite scroll, and filters that combine: genres (any/all), release years, TMDB score, popularity (vote count), original language, runtime, US age rating, and sorting. Every filter also works together with a text search (the server filters and sorts the top 500 matches). Filters live in the URL, so results survive reloads and can be shared.
 - **Movie pages** — poster, backdrop, score, runtime, certification, genres, overview, director/writers, cast, trailer, recommendations.
 - **Watchlists** — create, rename, describe, delete and organize multiple lists; add a movie to several lists; mark watched; rate 1–5 stars; sort and filter within a list; undo removals; activity history.
 - **Friends** — find people by username or name, send/cancel/accept/decline requests, remove friends, live updates and a request badge.
@@ -20,7 +20,7 @@ eyelevel is a React Native + web app (Expo Router) backed by Firebase and the TM
 
 | Layer | Technology |
 | --- | --- |
-| App | Expo SDK 52, Expo Router 4 (static rendering + API routes), React Native 0.76, React Native Web |
+| App | Expo SDK 58, Expo Router (static rendering + API routes), React 19, React Native 0.88 (New Architecture), React Native Web |
 | Auth & data | Firebase Authentication, Cloud Firestore (security rules in `firestore.rules`) |
 | Movie data | TMDB API v3, accessed **only** through the app's server-side `/api` routes |
 | Hosting | Vercel (`vercel.json` + `api/index.js`) or any Node/Docker host (`server/index.js`, `Dockerfile`) |
@@ -36,6 +36,9 @@ Browser / native app
                                   └─ TMDB API (key never leaves the server)
 ```
 
+- Pages are served with a strict **Content-Security-Policy** (`server/csp.js`): scripts only from the site itself, images only from the TMDB CDN, network access only to the API and Firebase.
+- The API is **rate limited** per client IP: per server instance, and optionally across all instances through Upstash Redis (`src/server/rateLimit.ts`).
+
 - `app/` — routes (screens) and `app/api/` server routes.
 - `src/context/` — auth, library (watchlists), social (friends), theme, feedback (toasts/dialogs).
 - `src/data/` — Firestore data model (`types.ts`), reads/writes (atomic batches), legacy migration.
@@ -47,7 +50,7 @@ Friends never read each other's private data. Each user's client maintains one f
 
 ## Getting started
 
-Requirements: Node 20+, and Java 11+ for the Firebase emulators.
+Requirements: Node 22.13+ (or 24.3+), and Java 21+ for the Firebase emulators.
 
 ```bash
 npm ci
@@ -83,7 +86,7 @@ npm run web
 | Command | What it does |
 | --- | --- |
 | `npm run web` / `npm start` | Dev server (web / native via Expo) |
-| `npm run build:web` | Production export to `dist/` |
+| `npm run build:web` | Production export to `dist/` (and its Content-Security-Policy) |
 | `npm run serve` | Serve the production build (`server/index.js`) |
 | `npm run typecheck` / `npm run lint` | TypeScript / ESLint |
 | `npm test` | Unit + API tests (mock TMDB in-process) |
@@ -97,4 +100,4 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions (Firebase s
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

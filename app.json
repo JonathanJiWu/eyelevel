@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "eyelevel",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.eyelevel"
@@ -21,7 +20,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "server",
+      "output": "static",
       "favicon": "./assets/images/favicon.png",
       "name": "eyelevel",
       "shortName": "eyelevel",
@@ -30,7 +29,13 @@
       "backgroundColor": "#121212"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "apiRoutes": true,
+          "sitemap": false
+        }
+      ],
       [
         "expo-splash-screen",
         {

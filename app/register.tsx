@@ -89,7 +89,7 @@ export default function RegisterScreen() {
 
   return (
     <AuthLayout title="Create your account" subtitle="Save movies, share watchlists with friends and find something to watch together.">
-      {!configured ? <Notice tone="danger">Sign-up isn't available: this deployment is missing its Firebase configuration.</Notice> : null}
+      {!configured ? <Notice tone="danger">Sign-up isn&apos;t available: this deployment is missing its Firebase configuration.</Notice> : null}
       <TextField label="Display name" value={displayName} onChangeText={setDisplayName} maxLength={LIMITS.displayName} autoComplete="name" error={errors.displayName} testID="register-name" />
       <TextField
         label="Username"

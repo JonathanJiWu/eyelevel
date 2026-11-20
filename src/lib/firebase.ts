@@ -9,6 +9,7 @@ import {
   isFirebaseConfigured,
   useFirebaseEmulators,
 } from "@/src/config/env";
+import { startAppCheck } from "./appCheck";
 import { createAuth } from "./firebaseAuth";
 
 export interface FirebaseServices {
@@ -37,7 +38,10 @@ export function getFirebase(): FirebaseServices {
       "Firebase is not configured. Set the EXPO_PUBLIC_FIREBASE_* environment variables (see .env.example).",
     );
   }
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig.apiKey ? firebaseConfig : { ...firebaseConfig, apiKey: "demo-api-key" });
+  const fresh = !getApps().length;
+  const app = fresh ? initializeApp(firebaseConfig.apiKey ? firebaseConfig : { ...firebaseConfig, apiKey: "demo-api-key" }) : getApp();
+  // Before any Auth / Firestore request, so they carry App Check tokens.
+  if (fresh) startAppCheck(app);
   const auth = createAuth(app);
   const db = initializeFirestore(app, { localCache: memoryLocalCache(), ignoreUndefinedProperties: true });
   if (useFirebaseEmulators) {

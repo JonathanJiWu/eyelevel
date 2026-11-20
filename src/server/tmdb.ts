@@ -155,8 +155,12 @@ async function fetchJson(url: URL, config: TmdbConfig): Promise<unknown> {
 
 /**
  * GET a TMDB path with caching. The cache key never contains credentials.
+ * `cache: false` skips the response cache (callers that keep their own,
+ * smaller cache of derived data); concurrent identical requests still share
+ * one upstream call.
  */
-export async function tmdbGet<T = unknown>(path: string, params: Params, ttlMs: number): Promise<T> {
+export async function tmdbGet<T = unknown>(path: string, params: Params, ttlMs: number, options: { cache?: boolean } = {}): Promise<T> {
+  const useCache = options.cache !== false;
   const config = readConfig();
   if (!config.apiKey && !config.readToken) {
     throw new TmdbError(503, "not_configured", "Movie data is not configured on the server (missing TMDB credentials).");
@@ -164,7 +168,7 @@ export async function tmdbGet<T = unknown>(path: string, params: Params, ttlMs: 
   const url = buildUrl(config, path, params);
   const key = url.toString();
 
-  const fresh = cache.get(key);
+  const fresh = useCache ? cache.get(key) : undefined;
   if (fresh !== undefined) return fresh as T;
   const pending = inflight.get(key);
   if (pending) return pending as Promise<T>;
@@ -172,10 +176,10 @@ export async function tmdbGet<T = unknown>(path: string, params: Params, ttlMs: 
   const request = (async () => {
     try {
       const data = await fetchJson(url, config);
-      cache.set(key, data, ttlMs);
+      if (useCache) cache.set(key, data, ttlMs);
       return data;
     } catch (error) {
-      const stale = cache.getStale(key);
+      const stale = useCache ? cache.getStale(key) : undefined;
       if (stale !== undefined && error instanceof TmdbError && error.code !== "not_found") {
         console.warn(`[tmdb] Serving stale data for ${path}: ${error.code}`);
         return stale;
