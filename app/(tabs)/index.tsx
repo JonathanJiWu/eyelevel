@@ -277,7 +277,12 @@ export default function DiscoverScreen() {
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
         ListFooterComponent={footer}
-        onEndReached={feed.loadMore}
+        // Ignore end-reached events until the list has been measured with the
+        // current movies: right after a page arrives FlatList still holds the
+        // loading skeleton's (shorter) content size and would fire at once.
+        onEndReached={() => {
+          if (content.count === feed.movies.length) feed.loadMore();
+        }}
         onEndReachedThreshold={0.6}
         // FlatList's onEndReached can miss on web; also check the distance to
         // the end on every scroll (loadMore ignores duplicate calls).

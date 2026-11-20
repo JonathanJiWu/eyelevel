@@ -125,6 +125,8 @@ test.describe("discovery", () => {
     await page.goto("/");
     const cards = page.getByTestId("movie-grid").getByTestId(/^movie-card-/);
     await expect(cards.first()).toBeVisible();
+    // The first page fills this screen: nothing else loads until the user scrolls.
+    await page.waitForTimeout(1500);
     expect(await cards.count()).toBe(20);
     // Scroll like a person does (wheel events), until two more pages loaded.
     await page.getByTestId("movie-grid").hover();
